@@ -6,21 +6,23 @@ describe('reddit read adapter', () => {
     it('returns threaded rows from the browser-evaluated payload', async () => {
         const page = {
             goto: vi.fn().mockResolvedValue(undefined),
+            wait: vi.fn().mockResolvedValue(undefined),
             evaluate: vi.fn().mockResolvedValue([
-                { type: 'POST', author: 'alice', score: 10, text: 'Title' },
-                { type: 'L0', author: 'bob', score: 5, text: 'Comment' },
+                { type: 'POST', author: 'alice', score: 10, time: '2026-04-21T08:00:00.000Z', text: 'Title' },
+                { type: 'L0', author: 'bob', score: 5, time: '2026-04-21T08:05:00.000Z', text: 'Comment' },
             ]),
         };
         const result = await command.func(page, { 'post-id': 'abc123', limit: 5 });
-        expect(page.goto).toHaveBeenCalledWith('https://www.reddit.com');
+        expect(page.goto).toHaveBeenCalledWith('https://www.reddit.com', { waitUntil: 'none' });
         expect(result).toEqual([
-            { type: 'POST', author: 'alice', score: 10, text: 'Title' },
-            { type: 'L0', author: 'bob', score: 5, text: 'Comment' },
+            { type: 'POST', author: 'alice', score: 10, time: '2026-04-21T08:00:00.000Z', text: 'Title' },
+            { type: 'L0', author: 'bob', score: 5, time: '2026-04-21T08:05:00.000Z', text: 'Comment' },
         ]);
     });
     it('surfaces adapter-level API errors clearly', async () => {
         const page = {
             goto: vi.fn().mockResolvedValue(undefined),
+            wait: vi.fn().mockResolvedValue(undefined),
             evaluate: vi.fn().mockResolvedValue({ error: 'Reddit API returned HTTP 403' }),
         };
         await expect(command.func(page, { 'post-id': 'abc123' })).rejects.toThrow('Reddit API returned HTTP 403');

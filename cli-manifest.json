@@ -13840,12 +13840,13 @@
       "type",
       "author",
       "score",
+      "time",
       "text"
     ],
     "type": "js",
     "modulePath": "reddit/read.js",
     "sourceFile": "reddit\\read.js",
-    "navigateBefore": "https://reddit.com"
+    "navigateBefore": false
   },
   {
     "site": "reddit",

@@ -14,6 +14,8 @@ cli({
     description: 'Read a Reddit post and its comments',
     domain: 'reddit.com',
     strategy: Strategy.COOKIE,
+    browser: true,
+    navigateBefore: false,
     args: [
         { name: 'post-id', required: true, positional: true, help: 'Post ID (e.g. 1abc123) or full URL' },
         { name: 'sort', default: 'best', help: 'Comment sort: best, top, new, controversial, old, qa' },
@@ -22,14 +24,18 @@ cli({
         { name: 'replies', type: 'int', default: 5, help: 'Max replies shown per comment at each level (sorted by score)' },
         { name: 'max-length', type: 'int', default: 2000, help: 'Max characters per comment body (min 100)' },
     ],
-    columns: ['type', 'author', 'score', 'text'],
+    columns: ['type', 'author', 'score', 'time', 'text'],
     func: async (page, kwargs) => {
         const sort = kwargs.sort ?? 'best';
         const limit = Math.max(1, kwargs.limit ?? 25);
         const maxDepth = Math.max(1, kwargs.depth ?? 2);
         const maxReplies = Math.max(1, kwargs.replies ?? 5);
         const maxLength = Math.max(100, kwargs['max-length'] ?? 2000);
-        await page.goto('https://www.reddit.com');
+        // Reddit home often re-renders aggressively right after navigation.
+        // Skip Page.goto()'s DOM-settle exec round-trip here and let the page
+        // stabilize briefly before issuing our fetch-based evaluate call.
+        await page.goto('https://www.reddit.com', { waitUntil: 'none' });
+        await page.wait(2);
         const data = await page.evaluate(`
       (async function() {
         var postId = ${JSON.stringify(kwargs['post-id'])};
@@ -66,6 +72,7 @@ cli({
             type: 'POST',
             author: post.author || '[deleted]',
             score: post.score || 0,
+            time: post.created_utc ? new Date(post.created_utc * 1000).toISOString() : '',
             text: post.title + (body ? '\\n\\n' + body : '') + (post.url && !post.is_self ? '\\n' + post.url : ''),
           });
         }
@@ -91,6 +98,7 @@ cli({
             type: depth === 0 ? 'L0' : 'L' + depth,
             author: d.author || '[deleted]',
             score: d.score || 0,
+            time: d.created_utc ? new Date(d.created_utc * 1000).toISOString() : '',
             text: indentedBody,
           });
 
@@ -118,6 +126,7 @@ cli({
                 type: 'L' + (depth + 1),
                 author: '',
                 score: '',
+                time: '',
                 text: cutoffIndent + '[+' + totalHidden + ' more replies]',
               });
             }
@@ -140,6 +149,7 @@ cli({
               type: 'L' + (depth + 1),
               author: '',
               score: '',
+              time: '',
               text: moreIndent + '[+' + hidden + ' more replies]',
             });
           }
@@ -166,6 +176,7 @@ cli({
             type: '',
             author: '',
             score: '',
+            time: '',
             text: '[+' + hiddenTopLevel + ' more top-level comments]',
           });
         }
