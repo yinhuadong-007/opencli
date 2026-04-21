@@ -26,3 +26,5 @@ docs/.vitepress/cache
 autoresearch/results/
 autoresearch-results.tsv
 cli-manifest.json
+jackwener-opencli-*.tgz
+.playwright-cli/
