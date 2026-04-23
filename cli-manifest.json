@@ -9970,6 +9970,41 @@
     "navigateBefore": "https://ke.com"
   },
   {
+    "site": "keywords-surfer",
+    "name": "long-tail",
+    "description": "Read Keyword Surfer long-tail keyword ideas from Google search results",
+    "domain": "www.google.com",
+    "strategy": "public",
+    "browser": true,
+    "args": [
+      {
+        "name": "query",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "Google search query used to load Keyword Surfer keyword ideas"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 10,
+        "required": false,
+        "help": "Maximum number of long-tail keywords to return (1-50)"
+      }
+    ],
+    "columns": [
+      "rank",
+      "keyword",
+      "search_volume",
+      "overlap",
+      "url"
+    ],
+    "type": "js",
+    "modulePath": "keywords-surfer/long-tail.js",
+    "sourceFile": "keywords-surfer\\long-tail.js",
+    "navigateBefore": false
+  },
+  {
     "site": "keywordseverywhere",
     "name": "trends",
     "description": "Scrape Keywords Everywhere Trends category pages",
