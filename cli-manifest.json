@@ -9980,16 +9980,16 @@
       {
         "name": "category",
         "type": "string",
-        "default": "technology",
+        "default": "all",
         "required": false,
-        "help": "Category slug, e.g. technology"
+        "help": "Category slug, or all; e.g. technology, business, health, finance, education"
       },
       {
         "name": "subcategory",
         "type": "string",
-        "default": "ai",
+        "default": "",
         "required": false,
-        "help": "Subcategory slug, e.g. ai"
+        "help": "Optional subcategory slug, e.g. ai, legal, retail"
       },
       {
         "name": "sort",
@@ -9997,6 +9997,27 @@
         "default": "growth_quarter",
         "required": false,
         "help": "Sort: growth_5_years, growth_year, growth_quarter, volume, alphabetical"
+      },
+      {
+        "name": "status",
+        "type": "string",
+        "default": "all",
+        "required": false,
+        "help": "Status filter: all, surging, steady, peaked"
+      },
+      {
+        "name": "timeframe",
+        "type": "string",
+        "default": "5-years",
+        "required": false,
+        "help": "Timeframe page: 3-months, 6-months, 1-year, 2-years, 5-years, 10-years, all-time"
+      },
+      {
+        "name": "keyword",
+        "type": "string",
+        "default": "",
+        "required": false,
+        "help": "Keyword query, passed as URL param k=..."
       },
       {
         "name": "page_size",
@@ -14006,6 +14027,64 @@
     "type": "js",
     "modulePath": "reddit/search_communities.js",
     "sourceFile": "reddit\\search_communities.js",
+    "navigateBefore": "https://reddit.com"
+  },
+  {
+    "site": "reddit",
+    "name": "search_posts",
+    "description": "Search Reddit posts by keyword",
+    "domain": "reddit.com",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "query",
+        "type": "string",
+        "required": true,
+        "positional": true,
+        "help": "Post search query"
+      },
+      {
+        "name": "subreddit",
+        "type": "string",
+        "default": "",
+        "required": false,
+        "help": "Search within a specific subreddit"
+      },
+      {
+        "name": "sort",
+        "type": "string",
+        "default": "relevance",
+        "required": false,
+        "help": "sort: Relevance, Hot, Top, New, Comment count"
+      },
+      {
+        "name": "time",
+        "type": "string",
+        "default": "all",
+        "required": false,
+        "help": "Time: All time, Past year, Past month, Past week, Today, Past hour"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 15,
+        "required": false,
+        "help": "Number of posts to return"
+      }
+    ],
+    "columns": [
+      "title",
+      "subreddit",
+      "author",
+      "score",
+      "comments",
+      "created_at",
+      "url"
+    ],
+    "type": "js",
+    "modulePath": "reddit/search_posts.js",
+    "sourceFile": "reddit\\search_posts.js",
     "navigateBefore": "https://reddit.com"
   },
   {
