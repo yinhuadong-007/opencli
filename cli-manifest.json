@@ -314,7 +314,7 @@
     ],
     "type": "js",
     "modulePath": "51job/company.js",
-    "sourceFile": "51job/company.js",
+    "sourceFile": "51job\\company.js",
     "navigateBefore": false
   },
   {
@@ -354,7 +354,7 @@
     ],
     "type": "js",
     "modulePath": "51job/detail.js",
-    "sourceFile": "51job/detail.js",
+    "sourceFile": "51job\\detail.js",
     "navigateBefore": false
   },
   {
@@ -419,7 +419,7 @@
     ],
     "type": "js",
     "modulePath": "51job/hot.js",
-    "sourceFile": "51job/hot.js",
+    "sourceFile": "51job\\hot.js",
     "navigateBefore": false
   },
   {
@@ -526,7 +526,7 @@
     ],
     "type": "js",
     "modulePath": "51job/search.js",
-    "sourceFile": "51job/search.js",
+    "sourceFile": "51job\\search.js",
     "navigateBefore": false
   },
   {
@@ -1995,7 +1995,7 @@
     ],
     "type": "js",
     "modulePath": "bilibili/video.js",
-    "sourceFile": "bilibili/video.js",
+    "sourceFile": "bilibili\\video.js",
     "navigateBefore": true
   },
   {
@@ -3532,7 +3532,7 @@
       {
         "name": "op",
         "type": "str",
-        "default": "C:\\Users\\AAA\\Pictures\\chatgpt",
+        "default": "~/Pictures/chatgpt",
         "required": false,
         "help": "Output directory"
       },
@@ -7120,7 +7120,7 @@
       {
         "name": "op",
         "type": "str",
-        "default": "C:\\Users\\AAA\\tmp\\gemini-images",
+        "default": "~/tmp/gemini-images",
         "required": false,
         "help": "Output directory shorthand"
       },
@@ -8543,7 +8543,7 @@
       {
         "name": "path",
         "type": "str",
-        "default": "C:\\Users\\AAA\\Downloads\\Instagram",
+        "default": "~/Downloads/Instagram",
         "required": false,
         "help": "Download directory"
       }
@@ -9968,6 +9968,64 @@
     "modulePath": "ke/zufang.js",
     "sourceFile": "ke\\zufang.js",
     "navigateBefore": "https://ke.com"
+  },
+  {
+    "site": "keyword-research",
+    "name": "serp_kd",
+    "description": "Estimate keyword difficulty from Google SERP, allintitle, OpenPageRank, and UGC signals",
+    "domain": "www.google.com",
+    "strategy": "public",
+    "browser": true,
+    "args": [
+      {
+        "name": "query",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "Keyword to evaluate"
+      },
+      {
+        "name": "country",
+        "type": "string",
+        "default": "US",
+        "required": false,
+        "help": "Two-letter Google market code, e.g. US, GB, CA"
+      },
+      {
+        "name": "lang",
+        "type": "string",
+        "default": "en",
+        "required": false,
+        "help": "Google UI language, e.g. en, zh-CN"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 10,
+        "required": false,
+        "help": "Number of natural results to analyze (max 10)"
+      },
+      {
+        "name": "openpagerank_key",
+        "type": "string",
+        "required": false,
+        "help": "Optional OpenPageRank API key. You can also set OPENPAGERANK_API_KEY, OPEN_PAGE_RANK_API_KEY, or API_OPR globally."
+      }
+    ],
+    "columns": [
+      "kd",
+      "kd_level",
+      "allintitle_count",
+      "search_volume",
+      "avg_opr_decimal",
+      "ugc_count",
+      "openpagerank_used",
+      "why"
+    ],
+    "type": "js",
+    "modulePath": "keyword-research/SERP_kd.js",
+    "sourceFile": "keyword-research\\SERP_kd.js",
+    "navigateBefore": false
   },
   {
     "site": "keywords-surfer",
@@ -17867,7 +17925,7 @@
     ],
     "type": "js",
     "modulePath": "weread/ai-outline.js",
-    "sourceFile": "weread/ai-outline.js",
+    "sourceFile": "weread\\ai-outline.js",
     "navigateBefore": "https://weread.qq.com"
   },
   {
