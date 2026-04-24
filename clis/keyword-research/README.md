@@ -108,6 +108,11 @@ ratio = search_volume / max(allintitle_count, 1)
 - `ratio >= 2` => `34`
 - otherwise => `45`
 
+At the same time, `allintitle_count` still continues to score using the count gradient bands below. When both signals exist, the command keeps the higher of:
+
+- the ratio-based score
+- the count-based gradient score
+
 If search volume is unavailable, it uses `allintitle_count` directly:
 
 - `<= 50` => `0`
@@ -119,7 +124,17 @@ If search volume is unavailable, it uses `allintitle_count` directly:
 - `100000-1000000` => base `39`, then add a proportional range score toward `42`
 - `> 1000000` => `45`
 
-In other words, `allintitle_kd = gradient base score + proportional score within the current count band` when search volume is unavailable.
+In other words, the count branch uses:
+
+```text
+allintitle_kd = gradient base score + proportional score within the current count band
+```
+
+When search volume exists, the final `allintitle_kd` is:
+
+```text
+max(ratio_score, count_gradient_score)
+```
 
 There is also a minimum floor: if `allintitle_count > 100`, then `allintitle_kd` will be at least `10`, even when the search-volume ratio would otherwise push it lower.
 

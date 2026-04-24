@@ -162,23 +162,30 @@ export function scoreAllintitleKD({ allintitleCount, searchVolume }) {
         return Math.round(baseScore + progress * (upperScore - baseScore));
     };
 
+    const countScore = (() => {
+        if (count <= 50) return withMinimumFloor(0);
+        if (count < 200) return withMinimumFloor(interpolateBand(count, 50, 200, 0, 9));
+        if (count < 1000) return withMinimumFloor(interpolateBand(count, 200, 1000, 9, 18));
+        if (count < 5000) return withMinimumFloor(interpolateBand(count, 1000, 5000, 18, 27));
+        if (count < 20000) return withMinimumFloor(interpolateBand(count, 5000, 20000, 27, 34));
+        if (count < 100000) return withMinimumFloor(interpolateBand(count, 20000, 100000, 34, 39));
+        if (count < 1000000) return withMinimumFloor(interpolateBand(count, 100000, 1000000, 39, 42));
+        return withMinimumFloor(45);
+    })();
+
     if (Number.isFinite(volume) && volume > 0) {
         const ratio = volume / Math.max(count, 1);
-        if (ratio >= 20) return withMinimumFloor(0);
-        if (ratio >= 10) return withMinimumFloor(12);
-        if (ratio >= 5) return withMinimumFloor(24);
-        if (ratio >= 2) return withMinimumFloor(34);
-        return withMinimumFloor(45);
+        const ratioScore = (() => {
+            if (ratio >= 20) return withMinimumFloor(0);
+            if (ratio >= 10) return withMinimumFloor(12);
+            if (ratio >= 5) return withMinimumFloor(24);
+            if (ratio >= 2) return withMinimumFloor(34);
+            return withMinimumFloor(45);
+        })();
+        return Math.max(countScore, ratioScore);
     }
 
-    if (count <= 50) return withMinimumFloor(0);
-    if (count < 200) return withMinimumFloor(interpolateBand(count, 50, 200, 0, 9));
-    if (count < 1000) return withMinimumFloor(interpolateBand(count, 200, 1000, 9, 18));
-    if (count < 5000) return withMinimumFloor(interpolateBand(count, 1000, 5000, 18, 27));
-    if (count < 20000) return withMinimumFloor(interpolateBand(count, 5000, 20000, 27, 34));
-    if (count < 100000) return withMinimumFloor(interpolateBand(count, 20000, 100000, 34, 39));
-    if (count < 1000000) return withMinimumFloor(interpolateBand(count, 100000, 1000000, 39, 42));
-    return withMinimumFloor(45);
+    return countScore;
 }
 
 export function computeWeightedAverageOprDecimal(results) {
