@@ -7496,7 +7496,7 @@
     ],
     "type": "js",
     "modulePath": "google-scholar/cite.js",
-    "sourceFile": "google-scholar/cite.js",
+    "sourceFile": "google-scholar\\cite.js",
     "navigateBefore": false
   },
   {
@@ -7530,7 +7530,7 @@
     ],
     "type": "js",
     "modulePath": "google-scholar/profile.js",
-    "sourceFile": "google-scholar/profile.js",
+    "sourceFile": "google-scholar\\profile.js",
     "navigateBefore": false
   },
   {
@@ -13395,7 +13395,7 @@
     ],
     "type": "js",
     "modulePath": "powerchina/search.js",
-    "sourceFile": "powerchina/search.js",
+    "sourceFile": "powerchina\\search.js",
     "navigateBefore": "https://bid.powerchina.cn"
   },
   {
@@ -16081,7 +16081,7 @@
     ],
     "type": "js",
     "modulePath": "toutiao/articles.js",
-    "sourceFile": "toutiao/articles.js",
+    "sourceFile": "toutiao\\articles.js",
     "navigateBefore": "https://mp.toutiao.com"
   },
   {
@@ -17107,7 +17107,7 @@
     ],
     "type": "js",
     "modulePath": "uiverse/code.js",
-    "sourceFile": "uiverse/code.js",
+    "sourceFile": "uiverse\\code.js",
     "navigateBefore": "https://uiverse.io"
   },
   {
@@ -17148,7 +17148,7 @@
     ],
     "type": "js",
     "modulePath": "uiverse/preview.js",
-    "sourceFile": "uiverse/preview.js",
+    "sourceFile": "uiverse\\preview.js",
     "navigateBefore": "https://uiverse.io"
   },
   {
@@ -17814,7 +17814,7 @@
     "timeout": 180,
     "type": "js",
     "modulePath": "weixin/create-draft.js",
-    "sourceFile": "weixin/create-draft.js",
+    "sourceFile": "weixin\\create-draft.js",
     "navigateBefore": false
   },
   {
@@ -17883,7 +17883,7 @@
     "timeout": 60,
     "type": "js",
     "modulePath": "weixin/drafts.js",
-    "sourceFile": "weixin/drafts.js",
+    "sourceFile": "weixin\\drafts.js",
     "navigateBefore": false
   },
   {
