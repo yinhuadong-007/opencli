@@ -74,6 +74,19 @@ cli({
   ],
   columns: ['query', 'geo', 'date_range', 'trend_json'],
   func: async (page, kwargs) => {
+    const waitWithHeartbeat = async (totalMs) => {
+      const heartbeatMs = 8000;
+      let remaining = Math.max(0, Number(totalMs) || 0);
+      while (remaining > 0) {
+        const chunk = Math.min(heartbeatMs, remaining);
+        await page.wait(chunk / 1000);
+        remaining -= chunk;
+        if (remaining > 0) {
+          await page.evaluate('1');
+        }
+      }
+    };
+
     const rawQuery = String(kwargs.query || '').trim();
     const queries = rawQuery
       .split(',')
@@ -185,7 +198,7 @@ cli({
           '&tz=' + encodeURIComponent(String(tz)) +
           '&req=' + encodeURIComponent(JSON.stringify(req));
 
-        var retryDelays = [5000, 15000, 30000];
+        var retryDelays = [4000, 8000, 12000];
         var explore = await fetchTrendsJson(exploreUrl, retryDelays);
         var widgets = Array.isArray(explore && explore.widgets) ? explore.widgets : [];
         if (!widgets.length) throw new Error('No widgets returned');
@@ -247,7 +260,7 @@ cli({
       })()`;
 
     const runEvaluateWith429Recovery = async () => {
-      const pageRetryDelays = [8000, 20000, 40000];
+      const pageRetryDelays = [5000, 10000, 15000];
       let lastErr;
 
       for (let attempt = 0; attempt <= pageRetryDelays.length; attempt++) {
@@ -261,7 +274,7 @@ cli({
           if (is429 && attempt < pageRetryDelays.length) {
             await page.goto(explorePageUrl, { waitUntil: 'load', settleMs: 3000 });
             await page.wait(1);
-            await page.wait(pageRetryDelays[attempt] / 1000);
+            await waitWithHeartbeat(pageRetryDelays[attempt]);
             continue;
           }
 
