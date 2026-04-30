@@ -28,3 +28,4 @@ autoresearch-results.tsv
 cli-manifest.json
 jackwener-opencli-*.tgz
 .playwright-cli/
+opencli-extension-v*
