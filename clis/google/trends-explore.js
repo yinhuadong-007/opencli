@@ -129,9 +129,12 @@ function toNumeric(value) {
 
 function extractTimelineFromPayload(payload) {
   // Newer g4kJzf payload shape example:
-  // [[[ "agent", null, null, 74, [ [float, intValue, [[startTs],[endTs]], ...], ... ] ]]]
-  // Prefer this exact structure first, because it carries the integer trend values directly.
-  const agentRows = findFirst(
+  // [[
+  //   ["queryA", null, null, score, [[float, intValue, [[startTs],[endTs]], ...], ...]],
+  //   ["queryB", null, null, score, [[...], ...]]
+  // ]]
+  // Parse all query blocks so multi-keyword explore can return values per term.
+  const agentBlocks = findFirst(
     payload,
     (node) =>
       Array.isArray(node) &&
@@ -139,26 +142,34 @@ function extractTimelineFromPayload(payload) {
       node.every(
         (item) =>
           Array.isArray(item) &&
-          item.length >= 2 &&
-          toNumeric(item[1]) !== null,
+          typeof item[0] === 'string' &&
+          Array.isArray(item[4]),
       ),
   );
-  if (Array.isArray(agentRows) && agentRows.length > 0) {
-    const values = agentRows
-      .map((row) => toNumeric(row[1]))
-      .filter((value) => value !== null);
-    if (values.length > 0) {
-      const labels = agentRows.map((row, index) => {
-        const ts = toNumeric(row?.[2]?.[0]?.[0]);
-        if (ts === null) return String(index + 1);
-        try {
-          return new Date(ts * 1000).toISOString().slice(0, 10);
-        } catch {
-          return String(index + 1);
-        }
-      });
-      return { labels, series: [values] };
+  if (Array.isArray(agentBlocks) && agentBlocks.length > 0) {
+    let labels = [];
+    const series = [];
+    for (const block of agentBlocks) {
+      const points = Array.isArray(block[4]) ? block[4] : [];
+      if (points.length === 0) continue;
+      const values = points
+        .map((row) => (Array.isArray(row) ? toNumeric(row[1]) : null))
+        .filter((value) => value !== null);
+      if (values.length === 0) continue;
+      if (labels.length === 0) {
+        labels = points.map((row, index) => {
+          const ts = toNumeric(row?.[2]?.[0]?.[0]);
+          if (ts === null) return String(index + 1);
+          try {
+            return new Date(ts * 1000).toISOString().slice(0, 10);
+          } catch {
+            return String(index + 1);
+          }
+        });
+      }
+      series.push(values);
     }
+    if (labels.length > 0 && series.length > 0) return { labels, series };
   }
 
   const fromDefaultTimelineData = findFirst(
@@ -224,25 +235,27 @@ function extractRelatedFromPayload(payload) {
     }
   }
 
-  // Newer fXqlme payload shape:
-  // [[[ "agent", [ [query, value, delta], ... ], [ [query, value, delta], ... ] ]]]
-  // Empirically: first list is rising-like, second list is top-like.
-  const agentContainer = findFirst(
+  const isRowList = (rows) =>
+    Array.isArray(rows) &&
+    rows.length > 0 &&
+    rows.every((row) => Array.isArray(row) && typeof row[0] === 'string');
+
+  // fXqlme payload shapes seen in the wild:
+  // 1) [["agent", [rows...], [rows...]]]
+  // 2) [["<query>", [rows...], [rows...]]]
+  // We only care that [1] and [2] are row lists.
+  const relatedContainer = findFirst(
     normalized,
     (node) =>
       Array.isArray(node) &&
       node.length >= 3 &&
-      node[0] === 'agent' &&
-      Array.isArray(node[1]) &&
-      Array.isArray(node[2]),
+      typeof node[0] === 'string' &&
+      isRowList(node[1]) &&
+      isRowList(node[2]),
   );
-  if (Array.isArray(agentContainer) && agentContainer.length >= 3) {
-    const risingRows = Array.isArray(agentContainer[1]) ? agentContainer[1] : [];
-    const topRows = Array.isArray(agentContainer[2]) ? agentContainer[2] : [];
-    const rowLooksValid = (row) => Array.isArray(row) && typeof row[0] === 'string';
-    if (!risingRows.every(rowLooksValid) || !topRows.every(rowLooksValid)) {
-      return { top: [], rising: [], topDetails: [], risingDetails: [] };
-    }
+  if (Array.isArray(relatedContainer) && relatedContainer.length >= 3) {
+    const risingRows = Array.isArray(relatedContainer[1]) ? relatedContainer[1] : [];
+    const topRows = Array.isArray(relatedContainer[2]) ? relatedContainer[2] : [];
     const toQuery = (row) => String(row?.[0] || '').trim();
     const toValue = (row) => {
       const n = toNumeric(row?.[1]);
@@ -299,6 +312,13 @@ function summarizePayloadShape(payload) {
   return typeof payload;
 }
 
+function normalizeGeo(rawGeo) {
+  const geo = String(rawGeo ?? '').trim();
+  if (!geo) return '';
+  if (/^worldwide$/i.test(geo) || /^global$/i.test(geo)) return '';
+  return geo;
+}
+
 async function forceScrollForRelated(page) {
   const script = `(() => {
     const root = document.scrollingElement || document.documentElement || document.body;
@@ -345,7 +365,7 @@ cli({
       required: true,
       help: 'Search term(s) to explore; for multiple terms, separate with commas, e.g. "ai,opencli,openclaw"',
     },
-    { name: 'geo', type: 'string', default: 'US', help: 'Country/region code (e.g. US, CN, GB)' },
+    { name: 'geo', type: 'string', default: 'Worldwide', help: 'Country/region code (e.g. US, CN, GB) or Worldwide' },
     {
       name: 'date',
       type: 'string',
@@ -375,7 +395,7 @@ cli({
       .split(',')
       .map((query) => query.trim())
       .filter(Boolean);
-    const geo = String(kwargs.geo || 'US').trim();
+    const geo = normalizeGeo(kwargs.geo);
     const date = String(kwargs.date || 'now 7-d').trim();
     const includeRelatedDetails = Boolean(kwargs.details ?? false);
     const tz = Number(kwargs.tz ?? -480);
@@ -516,6 +536,7 @@ cli({
         'Open the Explore page manually first and retry, or run with a longer timeout.',
       );
     }
+
     vlog(`success: labels=${labels.length}, series=${series.length}, includeRelatedDetails=${includeRelatedDetails}`);
 
     if (queries.length === 1) {
@@ -530,7 +551,7 @@ cli({
       return [
         {
           query: queries[0],
-          geo,
+          geo: geo || 'Worldwide',
           date_range: date,
           trend_json: JSON.stringify(trendJson),
         },
@@ -539,11 +560,11 @@ cli({
 
     return queries.map((query, index) => ({
       query,
-      geo,
+      geo: geo || 'Worldwide',
       date_range: date,
       trend_json: JSON.stringify({
         labels,
-        values: series[index] || [],
+        values: Array.isArray(series[index]) ? series[index] : [],
       }),
     }));
   },

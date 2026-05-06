@@ -8785,6 +8785,48 @@
   },
   {
     "site": "google",
+    "name": "trends-compare",
+    "description": "Compare multiple keywords using Trends g4kJzf relative series",
+    "access": "read",
+    "domain": "trends.google.com",
+    "strategy": "ui",
+    "browser": true,
+    "args": [
+      {
+        "name": "query",
+        "type": "string",
+        "required": true,
+        "positional": true,
+        "help": "Multiple search terms separated by commas, e.g. \"agent,night agent,openai\""
+      },
+      {
+        "name": "geo",
+        "type": "string",
+        "default": "Worldwide",
+        "required": false,
+        "help": "Country/region code (e.g. US, CN, GB) or Worldwide"
+      },
+      {
+        "name": "date",
+        "type": "string",
+        "default": "now 7-d",
+        "required": false,
+        "help": "Time range: now 7-d, today 1-m, today 3-m, today 12-m, today 5-y, or absolute range \"YYYY-MM-DD YYYY-MM-DD\""
+      }
+    ],
+    "columns": [
+      "query",
+      "geo",
+      "date_range",
+      "trend_json"
+    ],
+    "type": "js",
+    "modulePath": "google/trends-compare.js",
+    "sourceFile": "google/trends-compare.js",
+    "navigateBefore": true
+  },
+  {
+    "site": "google",
     "name": "trends-explore",
     "description": "Google Trends Explore: interest over time + related queries for a search term",
     "access": "read",
@@ -8802,9 +8844,9 @@
       {
         "name": "geo",
         "type": "string",
-        "default": "US",
+        "default": "Worldwide",
         "required": false,
-        "help": "Country/region code (e.g. US, CN, GB)"
+        "help": "Country/region code (e.g. US, CN, GB) or Worldwide"
       },
       {
         "name": "date",
