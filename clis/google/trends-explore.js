@@ -12,13 +12,6 @@
 import { cli, Strategy } from '@jackwener/opencli/registry';
 import { CliError } from '@jackwener/opencli/errors';
 
-function pickWidget(widgets, predicate) {
-  for (const widget of widgets) {
-    if (predicate(widget)) return widget;
-  }
-  return undefined;
-}
-
 function parseRelatedRanks(data) {
   const ranked = data?.default?.rankedList;
   const list = Array.isArray(ranked) ? ranked : [];
@@ -40,12 +33,309 @@ function parseRelatedRanks(data) {
   return { top, rising, topDetails, risingDetails };
 }
 
+function stripXssiPrefix(text) {
+  return String(text || '').replace(/^\)\]\}',?\s*\n/, '');
+}
+
+function parseChunkedBatchexecute(rawBody) {
+  const cleaned = stripXssiPrefix(rawBody).trim();
+  if (!cleaned) return [];
+  const lines = cleaned.split('\n');
+  const chunks = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i]?.trim();
+    if (!line) continue;
+    if (/^\d+$/.test(line)) {
+      const nextLine = lines[i + 1];
+      if (!nextLine) continue;
+      try {
+        chunks.push(JSON.parse(nextLine));
+      } catch {
+        // Keep scanning.
+      }
+      i += 1;
+      continue;
+    }
+    if (line.startsWith('[')) {
+      try {
+        chunks.push(JSON.parse(line));
+      } catch {
+        // Keep scanning.
+      }
+    }
+  }
+  return chunks;
+}
+
+function extractRpcPayloads(rawBody, rpcId) {
+  const chunks = parseChunkedBatchexecute(rawBody);
+  const out = [];
+  for (const chunk of chunks) {
+    if (!Array.isArray(chunk)) continue;
+    const items = Array.isArray(chunk[0]) ? chunk : [chunk];
+    for (const item of items) {
+      if (!Array.isArray(item) || item[0] !== 'wrb.fr' || item[1] !== rpcId) continue;
+      let payload = item[2];
+      if (typeof payload === 'string') {
+        try {
+          payload = JSON.parse(payload);
+        } catch {
+          // Keep raw payload string if it is not JSON.
+        }
+      }
+      out.push(payload);
+    }
+  }
+  return out;
+}
+
+function findFirst(node, predicate) {
+  const queue = [node];
+  while (queue.length) {
+    const cur = queue.shift();
+    if (predicate(cur)) return cur;
+    if (Array.isArray(cur)) {
+      for (const v of cur) queue.push(v);
+    } else if (cur && typeof cur === 'object') {
+      for (const v of Object.values(cur)) queue.push(v);
+    }
+  }
+  return null;
+}
+
+function findAll(node, predicate, maxCount = 50) {
+  const out = [];
+  const queue = [node];
+  while (queue.length && out.length < maxCount) {
+    const cur = queue.shift();
+    if (predicate(cur)) out.push(cur);
+    if (Array.isArray(cur)) {
+      for (const v of cur) queue.push(v);
+    } else if (cur && typeof cur === 'object') {
+      for (const v of Object.values(cur)) queue.push(v);
+    }
+  }
+  return out;
+}
+
+function toNumeric(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const n = Number(value);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
+function extractTimelineFromPayload(payload) {
+  // Newer g4kJzf payload shape example:
+  // [[[ "agent", null, null, 74, [ [float, intValue, [[startTs],[endTs]], ...], ... ] ]]]
+  // Prefer this exact structure first, because it carries the integer trend values directly.
+  const agentRows = findFirst(
+    payload,
+    (node) =>
+      Array.isArray(node) &&
+      node.length > 0 &&
+      node.every(
+        (item) =>
+          Array.isArray(item) &&
+          item.length >= 2 &&
+          toNumeric(item[1]) !== null,
+      ),
+  );
+  if (Array.isArray(agentRows) && agentRows.length > 0) {
+    const values = agentRows
+      .map((row) => toNumeric(row[1]))
+      .filter((value) => value !== null);
+    if (values.length > 0) {
+      const labels = agentRows.map((row, index) => {
+        const ts = toNumeric(row?.[2]?.[0]?.[0]);
+        if (ts === null) return String(index + 1);
+        try {
+          return new Date(ts * 1000).toISOString().slice(0, 10);
+        } catch {
+          return String(index + 1);
+        }
+      });
+      return { labels, series: [values] };
+    }
+  }
+
+  const fromDefaultTimelineData = findFirst(
+    payload,
+    (node) =>
+      node &&
+      typeof node === 'object' &&
+      !Array.isArray(node) &&
+      Array.isArray(node?.default?.timelineData),
+  );
+
+  let timeline = fromDefaultTimelineData?.default?.timelineData || null;
+  if (!Array.isArray(timeline) || timeline.length === 0) {
+    const candidates = findAll(
+      payload,
+      (node) => Array.isArray(node) && node.length > 0,
+      200,
+    );
+    let best = null;
+    let bestScore = -1;
+    for (const arr of candidates) {
+      let score = 0;
+      for (const item of arr) {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+        if (Array.isArray(item.value)) score += 3;
+        if (item.formattedTime || item.formattedAxisTime || item.time) score += 2;
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        best = arr;
+      }
+    }
+    timeline = best;
+  }
+
+  if (!Array.isArray(timeline) || timeline.length === 0) return { labels: [], series: [] };
+
+  const labels = timeline
+    .map((point) => point.formattedTime || point.formattedAxisTime || point.time || '')
+    .map((value) => String(value))
+    .filter((value) => value.length > 0);
+
+  const firstValues = Array.isArray(timeline[0]?.value) ? timeline[0].value : [];
+  const seriesCount = firstValues.length;
+  const series = [];
+  for (let index = 0; index < seriesCount; index += 1) {
+    const values = timeline
+      .map((point) => (Array.isArray(point.value) ? toNumeric(point.value[index]) : null))
+      .filter((value) => value !== null);
+    series.push(values);
+  }
+  return { labels, series };
+}
+
+function extractRelatedFromPayload(payload) {
+  let normalized = payload;
+  for (let i = 0; i < 2; i += 1) {
+    if (typeof normalized !== 'string') break;
+    try {
+      normalized = JSON.parse(normalized);
+    } catch {
+      break;
+    }
+  }
+
+  // Newer fXqlme payload shape:
+  // [[[ "agent", [ [query, value, delta], ... ], [ [query, value, delta], ... ] ]]]
+  // Empirically: first list is rising-like, second list is top-like.
+  const agentContainer = findFirst(
+    normalized,
+    (node) =>
+      Array.isArray(node) &&
+      node.length >= 3 &&
+      node[0] === 'agent' &&
+      Array.isArray(node[1]) &&
+      Array.isArray(node[2]),
+  );
+  if (Array.isArray(agentContainer) && agentContainer.length >= 3) {
+    const risingRows = Array.isArray(agentContainer[1]) ? agentContainer[1] : [];
+    const topRows = Array.isArray(agentContainer[2]) ? agentContainer[2] : [];
+    const rowLooksValid = (row) => Array.isArray(row) && typeof row[0] === 'string';
+    if (!risingRows.every(rowLooksValid) || !topRows.every(rowLooksValid)) {
+      return { top: [], rising: [], topDetails: [], risingDetails: [] };
+    }
+    const toQuery = (row) => String(row?.[0] || '').trim();
+    const toValue = (row) => {
+      const n = toNumeric(row?.[1]);
+      return n === null ? null : n;
+    };
+    const toDelta = (row) => {
+      const n = toNumeric(row?.[2]);
+      return n === null ? null : n;
+    };
+    const toDetail = (row) => {
+      const query = toQuery(row);
+      return {
+        query,
+        value: toValue(row),
+        delta: toDelta(row),
+        formattedValue: toValue(row) === null ? '' : String(toValue(row)),
+      };
+    };
+    const risingDetails = risingRows.map(toDetail).filter((item) => Boolean(item.query));
+    const topDetails = topRows.map(toDetail).filter((item) => Boolean(item.query));
+    return {
+      top: topDetails.map((item) => item.query),
+      rising: risingDetails.map((item) => item.query),
+      topDetails,
+      risingDetails,
+    };
+  }
+
+  const rankedList = findFirst(
+    normalized,
+    (node) =>
+      Array.isArray(node) &&
+      node.length > 0 &&
+      node.every((item) => item && typeof item === 'object' && !Array.isArray(item) && Array.isArray(item.rankedKeyword)),
+  );
+  if (!Array.isArray(rankedList)) return { top: [], rising: [], topDetails: [], risingDetails: [] };
+  return parseRelatedRanks({ default: { rankedList } });
+}
+
+function normalizeCaptureEntry(entry) {
+  const url = String(entry?.url || '');
+  const status = Number(entry?.responseStatus || 0);
+  const responsePreview = typeof entry?.responsePreview === 'string' ? entry.responsePreview : '';
+  const timestamp = Number(entry?.timestamp || 0);
+  return { url, status, responsePreview, timestamp };
+}
+
+function summarizePayloadShape(payload) {
+  if (Array.isArray(payload)) return `array(len=${payload.length})`;
+  if (payload && typeof payload === 'object') {
+    const keys = Object.keys(payload).slice(0, 10);
+    return `object(keys=${keys.join(',')})`;
+  }
+  return typeof payload;
+}
+
+async function forceScrollForRelated(page) {
+  const script = `(() => {
+    const root = document.scrollingElement || document.documentElement || document.body;
+    const beforeY = Number(window.scrollY || root.scrollTop || 0);
+    const step = Math.max(900, Math.floor(window.innerHeight * 0.9));
+    try { window.scrollBy(0, step); } catch {}
+    try { root.scrollTop = beforeY + step; } catch {}
+
+    // Trends often uses nested lazy sections; nudge likely scroll containers too.
+    const containers = Array.from(document.querySelectorAll('div, section, main'))
+      .filter((el) => {
+        try {
+          const st = window.getComputedStyle(el);
+          const scrollable = /(auto|scroll)/.test(st.overflowY || '');
+          return scrollable && el.scrollHeight > el.clientHeight + 80;
+        } catch {
+          return false;
+        }
+      })
+      .slice(0, 6);
+    for (const el of containers) {
+      try { el.scrollTop += Math.max(600, Math.floor(el.clientHeight * 0.8)); } catch {}
+    }
+
+    const afterY = Number(window.scrollY || root.scrollTop || 0);
+    return { beforeY, afterY, moved: afterY - beforeY, containers: containers.length };
+  })()`;
+  return page.evaluate(script);
+}
+
 cli({
   site: 'google',
   name: 'trends-explore',
   description: 'Google Trends Explore: interest over time + related queries for a search term',
   domain: 'trends.google.com',
   strategy: Strategy.UI,
+  access: 'read',
   browser: true,
   args: [
     {
@@ -73,24 +363,11 @@ cli({
     { name: 'tz', type: 'int', default: -480, help: 'Timezone offset minutes (e.g. -480 for PT)' },
   ],
   columns: ['query', 'geo', 'date_range', 'trend_json'],
-  func: async (page, kwargs) => {
-    const commandStart = Date.now();
-    const commandBudgetMs = 50000;
-    const remainingBudgetMs = () => commandBudgetMs - (Date.now() - commandStart);
-    const hasBudget = (reserveMs = 0) => remainingBudgetMs() > reserveMs;
-
-    const waitWithHeartbeat = async (totalMs) => {
-      const heartbeatMs = 8000;
-      let remaining = Math.max(0, Number(totalMs) || 0);
-      while (remaining > 0) {
-        if (!hasBudget(2000)) return;
-        const chunk = Math.min(heartbeatMs, remaining);
-        await page.wait(chunk / 1000);
-        remaining -= chunk;
-        if (remaining > 0) {
-          await page.evaluate('1');
-        }
-      }
+  func: async (page, kwargs, debug = false) => {
+    const verbose = Boolean(debug || process.env.OPENCLI_VERBOSE);
+    const vlog = (message) => {
+      if (!verbose) return;
+      process.stderr.write(`[google/trends-explore] ${message}\n`);
     };
 
     const rawQuery = String(kwargs.query || '').trim();
@@ -101,7 +378,6 @@ cli({
     const geo = String(kwargs.geo || 'US').trim();
     const date = String(kwargs.date || 'now 7-d').trim();
     const includeRelatedDetails = Boolean(kwargs.details ?? false);
-    const hl = String(kwargs.hl || 'en-US').trim();
     const tz = Number(kwargs.tz ?? -480);
 
     if (!queries.length) {
@@ -115,224 +391,132 @@ cli({
       throw new CliError('INVALID_ARGS', '`tz` must be a number (minutes offset)', 'Example: --tz -480');
     }
 
-    const req = {
-      comparisonItem: queries.map((query) => ({ keyword: query, geo, time: date })),
-      category: 0,
-      property: '',
-    };
-
     const explorePageUrl =
       `https://trends.google.com/explore?` +
       `geo=${encodeURIComponent(geo)}` +
       `&q=${encodeURIComponent(queries.join(', '))}` +
       `&date=${encodeURIComponent(date)}`;
 
+    const capturePattern = 'TrendsUi/data/batchexecute';
+    const captureEnabled = await page.startNetworkCapture?.(capturePattern).catch(() => false);
+    if (!captureEnabled) {
+      throw new CliError(
+        'UNSUPPORTED',
+        'Network capture is unavailable for google/trends-explore',
+        'Enable browser network capture support in your OpenCLI runtime and retry.',
+      );
+    }
+    vlog(`network capture enabled with pattern="${capturePattern}"`);
+
     await page.goto(explorePageUrl, { waitUntil: 'load', settleMs: 3000 });
     await page.wait(1);
+    vlog(`navigated to explore page: ${explorePageUrl}`);
 
-    const evalScript = `(async function() {
-        function sleep(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
-        function stripXssiPrefix(text) {
-          return text.replace(/^\\)\\]\\}',?\\s*\\n/, '');
+    const needRelated = includeRelatedDetails;
+    const deadlineMs = Date.now() + 35_000;
+    let labels = [];
+    let series = [];
+    let related = { top: [], rising: [], topDetails: [], risingDetails: [] };
+    let lastSeenTs = 0;
+    let saw429 = false;
+    let loopCount = 0;
+    let scrolledForRelated = false;
+
+    while (Date.now() < deadlineMs) {
+      loopCount += 1;
+      const rawEntries = await page.readNetworkCapture?.().catch(() => []) || [];
+      const entries = Array.isArray(rawEntries) ? rawEntries.map(normalizeCaptureEntry) : [];
+      const fresh = entries.filter((entry) => entry.timestamp > lastSeenTs);
+      if (fresh.length > 0) {
+        lastSeenTs = Math.max(lastSeenTs, ...fresh.map((entry) => entry.timestamp));
+      }
+      if (fresh.length > 0) {
+        vlog(`poll#${loopCount}: fresh_entries=${fresh.length}, last_seen_ts=${lastSeenTs}`);
+      }
+
+      for (const entry of fresh) {
+        if (!entry.url.includes('/_/TrendsUi/data/batchexecute')) continue;
+        vlog(`capture: status=${entry.status} url=${entry.url}`);
+        if (entry.status === 429) {
+          saw429 = true;
+          vlog('capture: saw HTTP 429');
+          continue;
         }
-        async function fetchTrendsJson(url, retryDelaysMs) {
-          var delays = Array.isArray(retryDelaysMs) ? retryDelaysMs : [];
-          var lastErr = null;
-          for (var attempt = 0; attempt <= delays.length; attempt++) {
-            try {
-              const resp = await fetch(url, { credentials: 'include' });
-              const text = await resp.text();
-              if (!resp.ok) {
-                if (resp.status === 429 && attempt < delays.length) {
-                  await sleep(delays[attempt]);
-                  continue;
-                }
-                if (resp.status === 429) {
-                  throw new Error('__OPENCLI_HTTP_429__');
-                }
-                throw new Error('__OPENCLI_HTTP_STATUS_' + String(resp.status) + '__');
-              }
-              const cleaned = stripXssiPrefix(text).trim();
-              return JSON.parse(cleaned);
-            } catch (e) {
-              lastErr = e;
-              var msg2 = (e && e.message) ? String(e.message) : String(e);
-              if (msg2.indexOf('__OPENCLI_HTTP_429__') !== -1) {
-                throw e;
-              }
-              if ((msg2.indexOf('Failed to fetch') !== -1 || msg2.indexOf('NetworkError') !== -1) && attempt < delays.length) {
-                await sleep(delays[attempt]);
-                continue;
-              }
-              throw e;
+        if (entry.status < 200 || entry.status >= 300) continue;
+        if (!entry.responsePreview) continue;
+
+        const isTimeline = entry.url.includes('rpcids=g4kJzf');
+        const isRelated = entry.url.includes('rpcids=fXqlme');
+        if (!isTimeline && !isRelated) continue;
+
+        if (isTimeline) {
+          const payloads = extractRpcPayloads(entry.responsePreview, 'g4kJzf');
+          vlog(`timeline rpc payloads=${payloads.length}`);
+          for (const payload of payloads) {
+            vlog(`timeline payload shape=${summarizePayloadShape(payload)}`);
+            const extracted = extractTimelineFromPayload(payload);
+            if ((extracted.labels?.length || 0) > 0 && (extracted.series?.length || 0) > 0) {
+              labels = extracted.labels;
+              series = extracted.series;
+              vlog(`timeline parsed: labels=${labels.length}, series=${series.length}`);
             }
           }
-          throw lastErr || new Error('Failed to fetch');
         }
-        function pickWidget(widgets, pred) {
-          for (var i = 0; i < widgets.length; i++) {
-            if (pred(widgets[i])) return widgets[i];
+
+        if (needRelated && isRelated) {
+          const payloads = extractRpcPayloads(entry.responsePreview, 'fXqlme');
+          vlog(`related rpc payloads=${payloads.length}`);
+          for (const payload of payloads) {
+            vlog(`related payload shape=${summarizePayloadShape(payload)}`);
+            const extractedRelated = extractRelatedFromPayload(payload);
+            if ((extractedRelated.topDetails.length + extractedRelated.risingDetails.length) > 0) {
+              related = extractedRelated;
+              vlog(`related parsed: top=${related.top.length}, rising=${related.rising.length}, topDetails=${related.topDetails.length}, risingDetails=${related.risingDetails.length}`);
+            }
           }
-          return null;
-        }
-        function parseRelatedRanks(data) {
-          var ranked = data && data.default && data.default.rankedList;
-          var list = Array.isArray(ranked) ? ranked : [];
-          var pickText = function(keyword) {
-            var q = keyword && keyword.query;
-            return (typeof q === 'string') ? q : '';
-          };
-          var pickDetail = function(keyword) {
-            return {
-              query: (keyword && typeof keyword.query === 'string') ? keyword.query : '',
-              value: (keyword && typeof keyword.value === 'number') ? keyword.value : null,
-              formattedValue: (keyword && typeof keyword.formattedValue === 'string') ? keyword.formattedValue : '',
-            };
-          };
-          var topKeywords = ((list[0] && list[0].rankedKeyword) || []);
-          var risingKeywords = ((list[1] && list[1].rankedKeyword) || []);
-          var top = topKeywords.map(pickText).filter(Boolean);
-          var rising = risingKeywords.map(pickText).filter(Boolean);
-          var topDetails = topKeywords.map(pickDetail).filter(function(k) { return !!k.query; });
-          var risingDetails = risingKeywords.map(pickDetail).filter(function(k) { return !!k.query; });
-          return { top: top, rising: rising, topDetails: topDetails, risingDetails: risingDetails };
-        }
-
-        var hl = ${JSON.stringify(hl)};
-        var tz = ${JSON.stringify(tz)};
-        var req = ${JSON.stringify(req)};
-        var queries = ${JSON.stringify(queries)};
-
-        var exploreUrl =
-          'https://trends.google.com/trends/api/explore' +
-          '?hl=' + encodeURIComponent(hl) +
-          '&tz=' + encodeURIComponent(String(tz)) +
-          '&req=' + encodeURIComponent(JSON.stringify(req));
-
-        var retryDelays = [4000, 8000];
-        var explore = await fetchTrendsJson(exploreUrl, retryDelays);
-        var widgets = Array.isArray(explore && explore.widgets) ? explore.widgets : [];
-        if (!widgets.length) throw new Error('No widgets returned');
-
-        var timeSeriesWidget =
-          pickWidget(widgets, function(w) { return w && w.id === 'TIMESERIES'; }) ||
-          pickWidget(widgets, function(w) { return String((w && w.type) || '').toUpperCase().indexOf('TIMESERIES') !== -1; }) ||
-          pickWidget(widgets, function(w) { return String((w && w.title) || '').toLowerCase().indexOf('interest over time') !== -1; });
-
-        var relatedWidget =
-          pickWidget(widgets, function(w) { return w && w.id === 'RELATED_QUERIES'; }) ||
-          pickWidget(widgets, function(w) { return String((w && w.type) || '').toUpperCase().indexOf('RELATED_QUERIES') !== -1; }) ||
-          pickWidget(widgets, function(w) { return String((w && w.title) || '').toLowerCase().indexOf('related queries') !== -1; });
-
-        if (!timeSeriesWidget || !timeSeriesWidget.token || !timeSeriesWidget.request) {
-          throw new Error('Missing time series widget token/request');
-        }
-
-        var multilineUrl =
-          'https://trends.google.com/trends/api/widgetdata/multiline' +
-          '?hl=' + encodeURIComponent(hl) +
-          '&tz=' + encodeURIComponent(String(tz)) +
-          '&req=' + encodeURIComponent(JSON.stringify(timeSeriesWidget.request)) +
-          '&token=' + encodeURIComponent(String(timeSeriesWidget.token));
-
-        var multiline = await fetchTrendsJson(multilineUrl, retryDelays);
-        var timelineData = multiline && multiline.default && multiline.default.timelineData;
-        var timeline = Array.isArray(timelineData) ? timelineData : [];
-        var labels = timeline.map(function(p) { return p && p.formattedTime; }).filter(function(x) { return typeof x === 'string'; });
-
-        var seriesCount = 0;
-        if (timeline.length > 0 && Array.isArray(timeline[0].value)) {
-          seriesCount = timeline[0].value.length;
-        }
-
-        var series = [];
-        for (var s = 0; s < seriesCount; s++) {
-          var values = timeline.map(function(p) {
-            var arr = p && p.value;
-            var v = Array.isArray(arr) ? arr[s] : undefined;
-            return (typeof v === 'number') ? v : null;
-          }).filter(function(v) { return typeof v === 'number'; });
-          series.push(values);
-        }
-
-        var related = { top: [], rising: [], topDetails: [], risingDetails: [] };
-        if (relatedWidget && relatedWidget.token && relatedWidget.request) {
-          var relatedUrl =
-            'https://trends.google.com/trends/api/widgetdata/relatedsearches' +
-            '?hl=' + encodeURIComponent(hl) +
-            '&tz=' + encodeURIComponent(String(tz)) +
-            '&req=' + encodeURIComponent(JSON.stringify(relatedWidget.request)) +
-            '&token=' + encodeURIComponent(String(relatedWidget.token));
-          var relatedResp = await fetchTrendsJson(relatedUrl, retryDelays);
-          related = parseRelatedRanks(relatedResp);
-        }
-
-        return { labels: labels, series: series, related: related, queries: queries };
-      })()`;
-
-    const runEvaluateWith429Recovery = async () => {
-      const pageRetryDelays = [1200, 2500];
-      let lastErr;
-      const softRefresh = async () => {
-        await page.reload({ waitUntil: 'load', settleMs: 3000 });
-        await page.wait(1);
-      };
-
-      for (let attempt = 0; attempt <= pageRetryDelays.length; attempt++) {
-        if (!hasBudget(6000)) {
-          throw new CliError(
-            'TIMEOUT',
-            'google/trends-explore aborted early to avoid outer 60s timeout',
-            'Increase OPENCLI_BROWSER_COMMAND_TIMEOUT or retry with a simpler query',
-          );
-        }
-        try {
-          return await page.evaluate(evalScript);
-        } catch (error) {
-          lastErr = error;
-          const message = error instanceof Error ? error.message : String(error);
-          const is429 = /\b429\b/.test(message) || message.includes('__OPENCLI_HTTP_429__');
-          const isTimeout = /(timed?\s*out|timeout|execution context was destroyed)/i.test(message);
-
-          if (is429 && attempt < pageRetryDelays.length) {
-            await page.goto(explorePageUrl, { waitUntil: 'load', settleMs: 3000 });
-            await page.wait(1);
-            await waitWithHeartbeat(pageRetryDelays[attempt]);
-            continue;
-          }
-          if (is429) {
-            throw new CliError(
-              'RATE_LIMIT',
-              'Google Trends rate limited this request (HTTP 429)',
-              'Retry later, reduce request frequency, or increase OPENCLI_BROWSER_COMMAND_TIMEOUT',
-            );
-          }
-          if (isTimeout && attempt < pageRetryDelays.length) {
-            await softRefresh();
-            await waitWithHeartbeat(pageRetryDelays[attempt]);
-            continue;
-          }
-
-          throw error;
         }
       }
 
-      const lastMessage = lastErr instanceof Error ? lastErr.message : String(lastErr);
-      if (/\b429\b/.test(lastMessage) || lastMessage.includes('__OPENCLI_HTTP_429__')) {
+      const hasTimeline = labels.length > 0 && series.length > 0;
+      const hasRelated = !needRelated || related.topDetails.length > 0 || related.risingDetails.length > 0;
+      if (hasTimeline && hasRelated) {
+        vlog(`ready: hasTimeline=${hasTimeline}, hasRelated=${hasRelated}, loops=${loopCount}`);
+        break;
+      }
+
+      // Related-queries RPC (fXqlme) is often lazy-loaded only after scrolling.
+      if (needRelated && hasTimeline && !hasRelated && !scrolledForRelated && loopCount >= 4) {
+        try {
+          const pass1 = await forceScrollForRelated(page);
+          await page.wait(0.7);
+          const pass2 = await forceScrollForRelated(page);
+          await page.wait(0.7);
+          scrolledForRelated = true;
+          vlog(`triggered lazy related RPC by forced scroll: pass1=${JSON.stringify(pass1)} pass2=${JSON.stringify(pass2)}`);
+        } catch {
+          // Best effort only.
+        }
+      }
+
+      await page.wait(0.5);
+    }
+
+    if (labels.length === 0 || series.length === 0) {
+      vlog(`failed: labels=${labels.length}, series=${series.length}, saw429=${saw429}`);
+      if (saw429) {
         throw new CliError(
           'RATE_LIMIT',
           'Google Trends rate limited this request (HTTP 429)',
           'Retry later, reduce request frequency, or increase OPENCLI_BROWSER_COMMAND_TIMEOUT',
         );
       }
-      throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
-    };
-
-    const data = await runEvaluateWith429Recovery();
-
-    const labels = (data && data.labels) || [];
-    const series = (data && data.series) || [];
-    const related = (data && data.related) || { top: [], rising: [], topDetails: [], risingDetails: [] };
+      throw new CliError(
+        'UNKNOWN',
+        'Failed to parse Trends timeline from batchexecute capture',
+        'Open the Explore page manually first and retry, or run with a longer timeout.',
+      );
+    }
+    vlog(`success: labels=${labels.length}, series=${series.length}, includeRelatedDetails=${includeRelatedDetails}`);
 
     if (queries.length === 1) {
       const trendJson = {

@@ -7,6 +7,7 @@ cli({
   description: 'Search Reddit communities (subreddits) by keyword',
   domain: 'reddit.com',
   strategy: Strategy.COOKIE,
+  access: 'read',
   browser: true,
   args: [
     { name: 'query', type: 'string', required: true, positional: true, help: 'Community search query' },

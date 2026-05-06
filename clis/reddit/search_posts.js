@@ -49,6 +49,7 @@ cli({
   description: 'Search Reddit posts by keyword',
   domain: 'reddit.com',
   strategy: Strategy.COOKIE,
+  access: 'read',
   browser: true,
   args: [
     { name: 'query', type: 'string', required: true, positional: true, help: 'Post search query' },

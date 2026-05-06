@@ -89,6 +89,7 @@ cli({
     description: 'Read Keyword Surfer long-tail keyword ideas from Google search results',
     domain: SEARCH_DOMAIN,
     strategy: Strategy.PUBLIC,
+    access: 'read',
     browser: true,
     navigateBefore: false,
     args: [

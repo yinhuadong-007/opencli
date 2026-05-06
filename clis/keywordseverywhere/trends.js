@@ -96,6 +96,7 @@ cli({
   description: 'Scrape Keywords Everywhere Trends category pages',
   domain: DOMAIN,
   strategy: Strategy.PUBLIC,
+  access: 'read',
   browser: true,
   args: [
     { name: 'category', type: 'string', default: 'all', help: 'Category slug, or all; e.g. technology, business, health, finance, education' },

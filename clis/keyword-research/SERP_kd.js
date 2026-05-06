@@ -483,6 +483,7 @@ cli({
     description: 'Estimate keyword difficulty from Google SERP, allintitle, OpenPageRank, and UGC signals',
     domain: GOOGLE_DOMAIN,
     strategy: Strategy.PUBLIC,
+    access: 'read',
     browser: true,
     navigateBefore: false,
     args: [
