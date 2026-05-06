@@ -151,6 +151,7 @@ Error envelope always includes `error.code` and `error.message`. Target errors (
 |---------|-------|
 | `browser click <target> [--nth N]` | Returns `{clicked, target, matches_n, match_level}`. |
 | `browser type <target> <text> [--nth N]` | Clicks first, then types. Returns `{typed, text, target, matches_n, match_level, autocomplete}`. `autocomplete: true` means a combobox/datalist popup appeared after typing — you almost always need `keys Enter` or a follow-up `click` on the suggestion to commit the value. |
+| `browser fill <target> <text> [--nth N]` | Exact replacement for input, textarea, and contenteditable targets. Returns `{filled, verified, text, actual, matches_n, match_level}`. Use this when you need raw text set and verified, not keyboard/autocomplete behavior. Pipeline form supports `{ fill: { ref, text, submit: true } }`. |
 | `browser select <target> <option> [--nth N]` | Matches option by label first, then value. Use `compound` from `find`/`state` to see exactly what labels are available. |
 | `browser keys <key>` | `Enter`, `Escape`, `Tab`, `Control+a`, etc. Runs against the focused element. |
 | `browser scroll <direction> [--amount px]` | `up` / `down`. Default amount `500`. |
@@ -380,4 +381,4 @@ opencli browser eval "(() => document.querySelector('input[name=cardnumber]')?.v
 ## See also
 
 - `opencli-adapter-author` — turning what you just figured out into a reusable `~/.opencli/clis/<site>/<command>.js`.
-- `opencli-autofix` — when an existing adapter breaks, this skill walks you through `OPENCLI_DIAGNOSTIC` and filing a fix.
+- `opencli-autofix` — when an existing adapter breaks, this skill walks you through `--trace retain-on-failure` evidence and filing a fix.
