@@ -74,10 +74,16 @@ cli({
   ],
   columns: ['query', 'geo', 'date_range', 'trend_json'],
   func: async (page, kwargs) => {
+    const commandStart = Date.now();
+    const commandBudgetMs = 50000;
+    const remainingBudgetMs = () => commandBudgetMs - (Date.now() - commandStart);
+    const hasBudget = (reserveMs = 0) => remainingBudgetMs() > reserveMs;
+
     const waitWithHeartbeat = async (totalMs) => {
       const heartbeatMs = 8000;
       let remaining = Math.max(0, Number(totalMs) || 0);
       while (remaining > 0) {
+        if (!hasBudget(2000)) return;
         const chunk = Math.min(heartbeatMs, remaining);
         await page.wait(chunk / 1000);
         remaining -= chunk;
@@ -137,18 +143,23 @@ cli({
               const resp = await fetch(url, { credentials: 'include' });
               const text = await resp.text();
               if (!resp.ok) {
-                const msg = (text || '').trim().slice(0, 200);
                 if (resp.status === 429 && attempt < delays.length) {
                   await sleep(delays[attempt]);
                   continue;
                 }
-                throw new Error('HTTP ' + resp.status + (msg ? (': ' + msg) : ''));
+                if (resp.status === 429) {
+                  throw new Error('__OPENCLI_HTTP_429__');
+                }
+                throw new Error('__OPENCLI_HTTP_STATUS_' + String(resp.status) + '__');
               }
               const cleaned = stripXssiPrefix(text).trim();
               return JSON.parse(cleaned);
             } catch (e) {
               lastErr = e;
               var msg2 = (e && e.message) ? String(e.message) : String(e);
+              if (msg2.indexOf('__OPENCLI_HTTP_429__') !== -1) {
+                throw e;
+              }
               if ((msg2.indexOf('Failed to fetch') !== -1 || msg2.indexOf('NetworkError') !== -1) && attempt < delays.length) {
                 await sleep(delays[attempt]);
                 continue;
@@ -198,7 +209,7 @@ cli({
           '&tz=' + encodeURIComponent(String(tz)) +
           '&req=' + encodeURIComponent(JSON.stringify(req));
 
-        var retryDelays = [4000, 8000, 12000];
+        var retryDelays = [4000, 8000];
         var explore = await fetchTrendsJson(exploreUrl, retryDelays);
         var widgets = Array.isArray(explore && explore.widgets) ? explore.widgets : [];
         if (!widgets.length) throw new Error('No widgets returned');
@@ -260,20 +271,44 @@ cli({
       })()`;
 
     const runEvaluateWith429Recovery = async () => {
-      const pageRetryDelays = [5000, 10000, 15000];
+      const pageRetryDelays = [1200, 2500];
       let lastErr;
+      const softRefresh = async () => {
+        await page.reload({ waitUntil: 'load', settleMs: 3000 });
+        await page.wait(1);
+      };
 
       for (let attempt = 0; attempt <= pageRetryDelays.length; attempt++) {
+        if (!hasBudget(6000)) {
+          throw new CliError(
+            'TIMEOUT',
+            'google/trends-explore aborted early to avoid outer 60s timeout',
+            'Increase OPENCLI_BROWSER_COMMAND_TIMEOUT or retry with a simpler query',
+          );
+        }
         try {
           return await page.evaluate(evalScript);
         } catch (error) {
           lastErr = error;
           const message = error instanceof Error ? error.message : String(error);
-          const is429 = /\b429\b/.test(message);
+          const is429 = /\b429\b/.test(message) || message.includes('__OPENCLI_HTTP_429__');
+          const isTimeout = /(timed?\s*out|timeout|execution context was destroyed)/i.test(message);
 
           if (is429 && attempt < pageRetryDelays.length) {
             await page.goto(explorePageUrl, { waitUntil: 'load', settleMs: 3000 });
             await page.wait(1);
+            await waitWithHeartbeat(pageRetryDelays[attempt]);
+            continue;
+          }
+          if (is429) {
+            throw new CliError(
+              'RATE_LIMIT',
+              'Google Trends rate limited this request (HTTP 429)',
+              'Retry later, reduce request frequency, or increase OPENCLI_BROWSER_COMMAND_TIMEOUT',
+            );
+          }
+          if (isTimeout && attempt < pageRetryDelays.length) {
+            await softRefresh();
             await waitWithHeartbeat(pageRetryDelays[attempt]);
             continue;
           }
@@ -282,6 +317,14 @@ cli({
         }
       }
 
+      const lastMessage = lastErr instanceof Error ? lastErr.message : String(lastErr);
+      if (/\b429\b/.test(lastMessage) || lastMessage.includes('__OPENCLI_HTTP_429__')) {
+        throw new CliError(
+          'RATE_LIMIT',
+          'Google Trends rate limited this request (HTTP 429)',
+          'Retry later, reduce request frequency, or increase OPENCLI_BROWSER_COMMAND_TIMEOUT',
+        );
+      }
       throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
     };
 
