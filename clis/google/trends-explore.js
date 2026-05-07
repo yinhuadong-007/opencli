@@ -469,7 +469,7 @@ cli({
     };
 
     const runPhase = async (phaseName, timeoutMs) => {
-      const deadlineMs = Date.now() + timeoutMs;
+      let deadlineMs = Date.now() + timeoutMs;
       let scrolledForRelated = false;
 
       while (Date.now() < deadlineMs) {
@@ -541,12 +541,15 @@ cli({
         // Related-queries RPC (fXqlme) is often lazy-loaded only after scrolling.
         if (needRelated && hasTimeline && !hasRelated && !scrolledForRelated && phaseStats[phaseName].loops >= 4) {
           try {
+            const remainingBeforeResetMs = Math.max(0, deadlineMs - Date.now());
             const pass1 = await forceScrollForRelated(page);
             await page.wait(0.7);
             const pass2 = await forceScrollForRelated(page);
             await page.wait(0.7);
             scrolledForRelated = true;
+            deadlineMs = Date.now() + timeoutMs;
             vlog(`phase=${phaseName} triggered lazy related RPC: pass1=${JSON.stringify(pass1)} pass2=${JSON.stringify(pass2)}`);
+            vlog(`phase=${phaseName} deadline reset after scroll: remaining_before_ms=${remainingBeforeResetMs} new_deadline_ts=${deadlineMs}`);
           } catch {
             // Best effort only.
           }
