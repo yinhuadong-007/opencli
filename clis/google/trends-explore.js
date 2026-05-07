@@ -303,6 +303,30 @@ function normalizeCaptureEntry(entry) {
   return { url, status, responsePreview, timestamp };
 }
 
+function hashString(input) {
+  let h = 2166136261;
+  const str = String(input || '');
+  for (let i = 0; i < str.length; i += 1) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(36);
+}
+
+function payloadDedupeKey(rpcId, payload) {
+  let serialized = '';
+  if (typeof payload === 'string') {
+    serialized = payload;
+  } else {
+    try {
+      serialized = JSON.stringify(payload);
+    } catch {
+      serialized = String(payload);
+    }
+  }
+  return `${rpcId}:${hashString(serialized)}`;
+}
+
 function summarizePayloadShape(payload) {
   if (Array.isArray(payload)) return `array(len=${payload.length})`;
   if (payload && typeof payload === 'object') {
@@ -433,46 +457,51 @@ cli({
     vlog(`navigated to explore page: ${explorePageUrl}`);
 
     const needRelated = includeRelatedDetails;
-    const deadlineMs = Date.now() + 35_000;
     let labels = [];
     let series = [];
     let related = { top: [], rising: [], topDetails: [], risingDetails: [] };
-    let lastSeenTs = 0;
+    const seenPayloads = new Set();
     let saw429 = false;
-    let loopCount = 0;
-    let scrolledForRelated = false;
+    let usedReloadRetry = false;
+    const phaseStats = {
+      initial: { batches: 0, g4kJzf: 0, fXqlme: 0, loops: 0 },
+      reload: { batches: 0, g4kJzf: 0, fXqlme: 0, loops: 0 },
+    };
 
-    while (Date.now() < deadlineMs) {
-      loopCount += 1;
-      const rawEntries = await page.readNetworkCapture?.().catch(() => []) || [];
-      const entries = Array.isArray(rawEntries) ? rawEntries.map(normalizeCaptureEntry) : [];
-      const fresh = entries.filter((entry) => entry.timestamp > lastSeenTs);
-      if (fresh.length > 0) {
-        lastSeenTs = Math.max(lastSeenTs, ...fresh.map((entry) => entry.timestamp));
-      }
-      if (fresh.length > 0) {
-        vlog(`poll#${loopCount}: fresh_entries=${fresh.length}, last_seen_ts=${lastSeenTs}`);
-      }
+    const runPhase = async (phaseName, timeoutMs) => {
+      const deadlineMs = Date.now() + timeoutMs;
+      let scrolledForRelated = false;
 
-      for (const entry of fresh) {
-        if (!entry.url.includes('/_/TrendsUi/data/batchexecute')) continue;
-        vlog(`capture: status=${entry.status} url=${entry.url}`);
-        if (entry.status === 429) {
-          saw429 = true;
-          vlog('capture: saw HTTP 429');
-          continue;
+      while (Date.now() < deadlineMs) {
+        phaseStats[phaseName].loops += 1;
+        const rawEntries = await page.readNetworkCapture?.().catch(() => []) || [];
+        const entries = Array.isArray(rawEntries) ? rawEntries.map(normalizeCaptureEntry) : [];
+
+        if (entries.length > 0) {
+          vlog(`phase=${phaseName} poll#${phaseStats[phaseName].loops}: entries=${entries.length}`);
         }
-        if (entry.status < 200 || entry.status >= 300) continue;
-        if (!entry.responsePreview) continue;
 
-        const isTimeline = entry.url.includes('rpcids=g4kJzf');
-        const isRelated = entry.url.includes('rpcids=fXqlme');
-        if (!isTimeline && !isRelated) continue;
+        for (const entry of entries) {
+          if (!entry.url.includes('/_/TrendsUi/data/batchexecute')) continue;
+          phaseStats[phaseName].batches += 1;
+          vlog(`phase=${phaseName} capture: status=${entry.status} url=${entry.url}`);
+          if (entry.status === 429) {
+            saw429 = true;
+            vlog(`phase=${phaseName} capture: saw HTTP 429`);
+            continue;
+          }
+          if (entry.status < 200 || entry.status >= 300) continue;
+          if (!entry.responsePreview) continue;
 
-        if (isTimeline) {
-          const payloads = extractRpcPayloads(entry.responsePreview, 'g4kJzf');
-          vlog(`timeline rpc payloads=${payloads.length}`);
-          for (const payload of payloads) {
+          const timelinePayloads = extractRpcPayloads(entry.responsePreview, 'g4kJzf');
+          if (timelinePayloads.length > 0) {
+            phaseStats[phaseName].g4kJzf += timelinePayloads.length;
+            vlog(`phase=${phaseName} g4kJzf payloads=${timelinePayloads.length}`);
+          }
+          for (const payload of timelinePayloads) {
+            const key = payloadDedupeKey('g4kJzf', payload);
+            if (seenPayloads.has(key)) continue;
+            seenPayloads.add(key);
             vlog(`timeline payload shape=${summarizePayloadShape(payload)}`);
             const extracted = extractTimelineFromPayload(payload);
             if ((extracted.labels?.length || 0) > 0 && (extracted.series?.length || 0) > 0) {
@@ -481,62 +510,117 @@ cli({
               vlog(`timeline parsed: labels=${labels.length}, series=${series.length}`);
             }
           }
-        }
 
-        if (needRelated && isRelated) {
-          const payloads = extractRpcPayloads(entry.responsePreview, 'fXqlme');
-          vlog(`related rpc payloads=${payloads.length}`);
-          for (const payload of payloads) {
-            vlog(`related payload shape=${summarizePayloadShape(payload)}`);
-            const extractedRelated = extractRelatedFromPayload(payload);
-            if ((extractedRelated.topDetails.length + extractedRelated.risingDetails.length) > 0) {
-              related = extractedRelated;
-              vlog(`related parsed: top=${related.top.length}, rising=${related.rising.length}, topDetails=${related.topDetails.length}, risingDetails=${related.risingDetails.length}`);
+          if (needRelated) {
+            const relatedPayloads = extractRpcPayloads(entry.responsePreview, 'fXqlme');
+            if (relatedPayloads.length > 0) {
+              phaseStats[phaseName].fXqlme += relatedPayloads.length;
+              vlog(`phase=${phaseName} fXqlme payloads=${relatedPayloads.length}`);
+            }
+            for (const payload of relatedPayloads) {
+              const key = payloadDedupeKey('fXqlme', payload);
+              if (seenPayloads.has(key)) continue;
+              seenPayloads.add(key);
+              vlog(`related payload shape=${summarizePayloadShape(payload)}`);
+              const extractedRelated = extractRelatedFromPayload(payload);
+              if ((extractedRelated.topDetails.length + extractedRelated.risingDetails.length) > 0) {
+                related = extractedRelated;
+                vlog(`related parsed: top=${related.top.length}, rising=${related.rising.length}, topDetails=${related.topDetails.length}, risingDetails=${related.risingDetails.length}`);
+              }
             }
           }
         }
-      }
 
-      const hasTimeline = labels.length > 0 && series.length > 0;
-      const hasRelated = !needRelated || related.topDetails.length > 0 || related.risingDetails.length > 0;
-      if (hasTimeline && hasRelated) {
-        vlog(`ready: hasTimeline=${hasTimeline}, hasRelated=${hasRelated}, loops=${loopCount}`);
-        break;
-      }
-
-      // Related-queries RPC (fXqlme) is often lazy-loaded only after scrolling.
-      if (needRelated && hasTimeline && !hasRelated && !scrolledForRelated && loopCount >= 4) {
-        try {
-          const pass1 = await forceScrollForRelated(page);
-          await page.wait(0.7);
-          const pass2 = await forceScrollForRelated(page);
-          await page.wait(0.7);
-          scrolledForRelated = true;
-          vlog(`triggered lazy related RPC by forced scroll: pass1=${JSON.stringify(pass1)} pass2=${JSON.stringify(pass2)}`);
-        } catch {
-          // Best effort only.
+        const hasTimeline = labels.length > 0 && series.length > 0;
+        const hasRelated = !needRelated || related.topDetails.length > 0 || related.risingDetails.length > 0;
+        if (hasTimeline && hasRelated) {
+          vlog(`phase=${phaseName} ready: hasTimeline=${hasTimeline}, hasRelated=${hasRelated}`);
+          return;
         }
-      }
 
-      await page.wait(0.5);
+        // Related-queries RPC (fXqlme) is often lazy-loaded only after scrolling.
+        if (needRelated && hasTimeline && !hasRelated && !scrolledForRelated && phaseStats[phaseName].loops >= 4) {
+          try {
+            const pass1 = await forceScrollForRelated(page);
+            await page.wait(0.7);
+            const pass2 = await forceScrollForRelated(page);
+            await page.wait(0.7);
+            scrolledForRelated = true;
+            vlog(`phase=${phaseName} triggered lazy related RPC: pass1=${JSON.stringify(pass1)} pass2=${JSON.stringify(pass2)}`);
+          } catch {
+            // Best effort only.
+          }
+        }
+
+        if (saw429) return;
+        await page.wait(0.5);
+      }
+    };
+
+    await runPhase('initial', 35_000);
+
+    if (saw429) {
+      vlog(`phase=initial rate_limited stats=${JSON.stringify(phaseStats.initial)}`);
+      throw new CliError(
+        'RATE_LIMIT',
+        'Google Trends rate limited this request (HTTP 429)',
+        'Retry later, reduce request frequency, or increase OPENCLI_BROWSER_COMMAND_TIMEOUT',
+      );
+    }
+
+    const hasTimelineAfterInitial = labels.length > 0 && series.length > 0;
+    if (!hasTimelineAfterInitial) {
+      usedReloadRetry = true;
+      vlog(`phase=initial missing g4kJzf, reloading page via CDP; stats=${JSON.stringify(phaseStats.initial)}`);
+      try {
+        await page.cdp?.('Page.reload', { ignoreCache: true });
+      } catch (err) {
+        throw new CliError(
+          'UNKNOWN',
+          'Failed to reload Trends page for g4kJzf retry',
+          `CDP Page.reload failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+      await page.wait(2);
+      await runPhase('reload', 20_000);
+    }
+
+    if (saw429) {
+      const stats = usedReloadRetry ? { ...phaseStats.initial, reload: phaseStats.reload } : phaseStats.initial;
+      vlog(`rate_limited stats=${JSON.stringify(stats)}`);
+      throw new CliError(
+        'RATE_LIMIT',
+        'Google Trends rate limited this request (HTTP 429)',
+        'Retry later, reduce request frequency, or increase OPENCLI_BROWSER_COMMAND_TIMEOUT',
+      );
     }
 
     if (labels.length === 0 || series.length === 0) {
-      vlog(`failed: labels=${labels.length}, series=${series.length}, saw429=${saw429}`);
-      if (saw429) {
+      vlog(`failed: g4kJzf missing after retry=${usedReloadRetry}, initial=${JSON.stringify(phaseStats.initial)}, reload=${JSON.stringify(phaseStats.reload)}`);
+      if (usedReloadRetry) {
         throw new CliError(
-          'RATE_LIMIT',
-          'Google Trends rate limited this request (HTTP 429)',
-          'Retry later, reduce request frequency, or increase OPENCLI_BROWSER_COMMAND_TIMEOUT',
+          'UNKNOWN',
+          'Failed to capture Trends timeline RPC g4kJzf after reload retry',
+          'Run with --verbose and verify batchexecute responses are present and not blocked.',
         );
       }
       throw new CliError(
         'UNKNOWN',
-        'Failed to parse Trends timeline from batchexecute capture',
+        'Failed to capture Trends timeline RPC g4kJzf',
         'Open the Explore page manually first and retry, or run with a longer timeout.',
       );
     }
 
+    if (needRelated && related.topDetails.length === 0 && related.risingDetails.length === 0) {
+      vlog(`failed: fXqlme missing initial=${JSON.stringify(phaseStats.initial)}, reload=${JSON.stringify(phaseStats.reload)}`);
+      throw new CliError(
+        'UNKNOWN',
+        'Failed to capture related-queries RPC fXqlme while --details=true',
+        'Retry with --verbose and scroll the related queries section before running again.',
+      );
+    }
+
+    vlog(`stats initial=${JSON.stringify(phaseStats.initial)} reload=${JSON.stringify(phaseStats.reload)} usedReloadRetry=${usedReloadRetry}`);
     vlog(`success: labels=${labels.length}, series=${series.length}, includeRelatedDetails=${includeRelatedDetails}`);
 
     if (queries.length === 1) {
