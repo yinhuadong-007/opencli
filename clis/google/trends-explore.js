@@ -11,6 +11,60 @@
 
 import { cli, Strategy } from '@jackwener/opencli/registry';
 import { CliError } from '@jackwener/opencli/errors';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+const TRENDS_EXPLORE_MIN_CALL_INTERVAL_MS = 30_000;
+const TRENDS_EXPLORE_RATE_FILE = path.join(
+  os.homedir(),
+  '.opencli',
+  'cache',
+  'google',
+  'trends-explore-last-call.json',
+);
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function readLastCallTimestamp() {
+  try {
+    const raw = fs.readFileSync(TRENDS_EXPLORE_RATE_FILE, 'utf-8');
+    const parsed = JSON.parse(raw);
+    const ts = Number(parsed?.startedAt || 0);
+    return Number.isFinite(ts) && ts > 0 ? ts : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function writeLastCallTimestamp(ts) {
+  try {
+    fs.mkdirSync(path.dirname(TRENDS_EXPLORE_RATE_FILE), { recursive: true });
+    fs.writeFileSync(
+      TRENDS_EXPLORE_RATE_FILE,
+      JSON.stringify({ startedAt: ts }, null, 2),
+      'utf-8',
+    );
+  } catch {
+    // Best effort only. Rate limiter must not break command execution.
+  }
+}
+
+async function enforceStartInterval(vlog) {
+  const now = Date.now();
+  const lastStartedAt = readLastCallTimestamp();
+  const elapsed = now - lastStartedAt;
+  if (lastStartedAt > 0 && elapsed < TRENDS_EXPLORE_MIN_CALL_INTERVAL_MS) {
+    const waitMs = TRENDS_EXPLORE_MIN_CALL_INTERVAL_MS - elapsed;
+    vlog(`rate-guard: last_call=${lastStartedAt}, waiting=${waitMs}ms`);
+    await sleep(waitMs);
+  }
+  const startedAt = Date.now();
+  writeLastCallTimestamp(startedAt);
+  vlog(`rate-guard: current_call_started=${startedAt}`);
+}
 
 function parseRelatedRanks(data) {
   const ranked = data?.default?.rankedList;
@@ -413,6 +467,7 @@ cli({
       if (!verbose) return;
       process.stderr.write(`[google/trends-explore] ${message}\n`);
     };
+    await enforceStartInterval(vlog);
 
     const rawQuery = String(kwargs.query || '').trim();
     const queries = rawQuery
