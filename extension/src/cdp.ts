@@ -34,13 +34,22 @@ type NetworkCaptureEntry = {
   timestamp: number;
 };
 
+type CaptureLifecycleState = 'pending' | 'ready' | 'done-no-body';
+
+type InternalNetworkCaptureEntry = NetworkCaptureEntry & {
+  _requestId: string;
+  _state: CaptureLifecycleState;
+  _updatedAt: number;
+};
+
 type NetworkCaptureState = {
   patterns: string[];
-  entries: NetworkCaptureEntry[];
+  entries: InternalNetworkCaptureEntry[];
   requestToIndex: Map<string, number>;
 };
 
 const networkCaptures = new Map<number, NetworkCaptureState>();
+const PENDING_ENTRY_MAX_AGE_MS = 60_000;
 /** Check if a URL can be attached via CDP — only allow http(s) and blank pages. */
 function isDebuggableUrl(url?: string): boolean {
   if (!url) return true;  // empty/undefined = tab still loading, allow it
@@ -387,25 +396,37 @@ function getOrCreateNetworkCaptureEntry(tabId: number, requestId: string, fallba
   url?: string;
   method?: string;
   requestHeaders?: Record<string, string>;
-}): NetworkCaptureEntry | null {
+}): InternalNetworkCaptureEntry | null {
   const state = networkCaptures.get(tabId);
   if (!state) return null;
   const existingIndex = state.requestToIndex.get(requestId);
   if (existingIndex !== undefined) {
-    return state.entries[existingIndex] || null;
+    const existing = state.entries[existingIndex] || null;
+    if (existing) existing._updatedAt = Date.now();
+    return existing;
   }
   const url = fallback?.url || '';
   if (!shouldCaptureUrl(url, state.patterns)) return null;
-  const entry: NetworkCaptureEntry = {
+  const entry: InternalNetworkCaptureEntry = {
     kind: 'cdp',
     url,
     method: fallback?.method || 'GET',
     requestHeaders: fallback?.requestHeaders || {},
     timestamp: Date.now(),
+    _requestId: requestId,
+    _state: 'pending',
+    _updatedAt: Date.now(),
   };
   state.entries.push(entry);
   state.requestToIndex.set(requestId, state.entries.length - 1);
   return entry;
+}
+
+function rebuildRequestIndex(state: NetworkCaptureState): void {
+  state.requestToIndex.clear();
+  for (let i = 0; i < state.entries.length; i++) {
+    state.requestToIndex.set(state.entries[i]._requestId, i);
+  }
 }
 
 export async function startNetworkCapture(
@@ -424,10 +445,27 @@ export async function startNetworkCapture(
 export async function readNetworkCapture(tabId: number): Promise<NetworkCaptureEntry[]> {
   const state = networkCaptures.get(tabId);
   if (!state) return [];
-  const entries = state.entries.slice();
-  state.entries = [];
-  state.requestToIndex.clear();
-  return entries;
+  const now = Date.now();
+  const emitted: NetworkCaptureEntry[] = [];
+  const retained: InternalNetworkCaptureEntry[] = [];
+
+  for (const entry of state.entries) {
+    if (entry._state === 'pending' && now - entry._updatedAt > PENDING_ENTRY_MAX_AGE_MS) {
+      entry._state = 'done-no-body';
+    }
+
+    if (entry._state === 'pending') {
+      retained.push(entry);
+      continue;
+    }
+
+    const { _requestId: _rid, _state: _st, _updatedAt: _ut, ...publicEntry } = entry;
+    emitted.push(publicEntry);
+  }
+
+  state.entries = retained;
+  rebuildRequestIndex(state);
+  return emitted;
 }
 
 export function hasActiveNetworkCapture(tabId: number): boolean {
@@ -483,6 +521,8 @@ export function registerListeners(): void {
         requestHeaders: normalizeHeaders(request?.headers),
       });
       if (!entry) return;
+      entry._updatedAt = Date.now();
+      entry._state = 'pending';
       entry.requestBodyKind = request?.hasPostData ? 'string' : 'empty';
       {
         const raw = String(request?.postData || '');
@@ -521,6 +561,7 @@ export function registerListeners(): void {
         url: response?.url,
       });
       if (!entry) return;
+      entry._updatedAt = Date.now();
       entry.responseStatus = response?.status;
       entry.responseContentType = response?.mimeType || '';
       entry.responseHeaders = normalizeHeaders(response?.headers);
@@ -546,9 +587,25 @@ export function registerListeners(): void {
           entry.responseBodyFullSize = fullSize;
           entry.responseBodyTruncated = truncated;
         }
+        entry._state = 'ready';
+        entry._updatedAt = Date.now();
       } catch {
         // Optional; bodies are unavailable for some requests (e.g. uploads).
+        entry._state = 'done-no-body';
+        entry._updatedAt = Date.now();
       }
+      return;
+    }
+
+    if (method === 'Network.loadingFailed') {
+      const requestId = String(eventParams?.requestId || '');
+      const stateEntryIndex = state.requestToIndex.get(requestId);
+      if (stateEntryIndex === undefined) return;
+      const entry = state.entries[stateEntryIndex];
+      if (!entry) return;
+      entry._state = 'done-no-body';
+      entry._updatedAt = Date.now();
+      return;
     }
   });
 }
