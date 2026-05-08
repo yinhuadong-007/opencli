@@ -71,10 +71,16 @@ function parseRelatedRanks(data) {
   const list = Array.isArray(ranked) ? ranked : [];
   const pickText = (keyword) => {
     const query = keyword?.query;
-    return typeof query === 'string' ? query : '';
+    if (typeof query === 'string' && query.trim() !== '') return query;
+    const topicTitle = keyword?.topic?.title;
+    return typeof topicTitle === 'string' ? topicTitle : '';
   };
   const pickDetail = (keyword) => ({
-    query: typeof keyword?.query === 'string' ? keyword.query : '',
+    query: (() => {
+      if (typeof keyword?.query === 'string' && keyword.query.trim() !== '') return keyword.query;
+      if (typeof keyword?.topic?.title === 'string') return keyword.topic.title;
+      return '';
+    })(),
     value: typeof keyword?.value === 'number' ? keyword.value : null,
     formattedValue: typeof keyword?.formattedValue === 'string' ? keyword.formattedValue : '',
   });
@@ -87,8 +93,45 @@ function parseRelatedRanks(data) {
   return { top, rising, topDetails, risingDetails };
 }
 
+function isLegacyQueryRelatedEmpty(data) {
+  const rankedList = data?.default?.rankedList;
+  if (!Array.isArray(rankedList) || rankedList.length < 2) return false;
+  const top = Array.isArray(rankedList[0]?.rankedKeyword) ? rankedList[0].rankedKeyword : null;
+  const rising = Array.isArray(rankedList[1]?.rankedKeyword) ? rankedList[1].rankedKeyword : null;
+  if (!top || !rising) return false;
+  return top.length === 0 && rising.length === 0;
+}
+
+function getLegacyRankedListLength(data) {
+  const rankedList = data?.default?.rankedList;
+  return Array.isArray(rankedList) ? rankedList.length : 0;
+}
+
+function getLegacyRelatedKeywordTypeFromUrl(url) {
+  const input = String(url || '');
+  let decoded = input;
+  try {
+    decoded = decodeURIComponent(input);
+  } catch {
+    // Keep original when decode fails.
+  }
+  if (decoded.includes('"keywordType":"QUERY"')) return 'QUERY';
+  if (decoded.includes('"keywordType":"ENTITY"')) return 'ENTITY';
+  return 'UNKNOWN';
+}
+
 function stripXssiPrefix(text) {
   return String(text || '').replace(/^\)\]\}',?\s*\n/, '');
+}
+
+function parseXssiJson(text) {
+  const cleaned = stripXssiPrefix(text).trim();
+  if (!cleaned) return null;
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    return null;
+  }
 }
 
 function parseChunkedBatchexecute(rawBody) {
@@ -457,6 +500,13 @@ cli({
       default: false,
       help: 'Include top_details and rising_details in trend_json (default: false)',
     },
+    {
+      name: 'force_legacy',
+      type: 'boolean',
+      required: false,
+      default: false,
+      help: 'Force legacy fallback mode for testing (/trends/api/widgetdata/* capture)',
+    },
     { name: 'hl', type: 'string', default: 'en-US', help: 'UI language (e.g. en-US, zh-CN)' },
     { name: 'tz', type: 'int', default: -480, help: 'Timezone offset minutes (e.g. -480 for PT)' },
   ],
@@ -477,6 +527,8 @@ cli({
     const geo = normalizeGeo(kwargs.geo);
     const date = String(kwargs.date || 'now 7-d').trim();
     const includeRelatedDetails = Boolean(kwargs.details ?? false);
+    const forceLegacy = Boolean(kwargs.force_legacy ?? kwargs['force-legacy'] ?? false);
+    const hl = String(kwargs.hl || 'en-US').trim() || 'en-US';
     const tz = Number(kwargs.tz ?? -480);
 
     if (!queries.length) {
@@ -494,22 +546,14 @@ cli({
       `https://trends.google.com/explore?` +
       `geo=${encodeURIComponent(geo)}` +
       `&q=${encodeURIComponent(queries.join(', '))}` +
-      `&date=${encodeURIComponent(date)}`;
-
-    const capturePattern = 'TrendsUi/data/batchexecute';
-    const captureEnabled = await page.startNetworkCapture?.(capturePattern).catch(() => false);
-    if (!captureEnabled) {
-      throw new CliError(
-        'UNSUPPORTED',
-        'Network capture is unavailable for google/trends-explore',
-        'Enable browser network capture support in your OpenCLI runtime and retry.',
-      );
-    }
-    vlog(`network capture enabled with pattern="${capturePattern}"`);
-
-    await page.goto(explorePageUrl, { waitUntil: 'load', settleMs: 3000 });
-    await page.wait(1);
-    vlog(`navigated to explore page: ${explorePageUrl}`);
+      `&date=${encodeURIComponent(date)}` +
+      `&hl=${encodeURIComponent(hl)}`;
+    const legacyExplorePageUrl =
+      `https://trends.google.com/trends/explore?` +
+      `geo=${encodeURIComponent(geo)}` +
+      `&q=${encodeURIComponent(queries.join(', '))}` +
+      `&date=${encodeURIComponent(date)}` +
+      `&legacy&hl=${encodeURIComponent(hl)}`;
 
     const needRelated = includeRelatedDetails;
     let labels = [];
@@ -517,32 +561,31 @@ cli({
     let related = { top: [], rising: [], topDetails: [], risingDetails: [] };
     const seenPayloads = new Set();
     let saw429 = false;
-    let usedReloadRetry = false;
     const phaseStats = {
-      initial: { batches: 0, g4kJzf: 0, fXqlme: 0, loops: 0 },
-      reload: { batches: 0, g4kJzf: 0, fXqlme: 0, loops: 0 },
+      modern: { batches: 0, g4kJzf: 0, fXqlme: 0, loops: 0 },
+      legacy: { multiline: 0, relatedsearches: 0, loops: 0 },
     };
 
-    const runPhase = async (phaseName, timeoutMs) => {
+    const runModernPhase = async (timeoutMs) => {
       let deadlineMs = Date.now() + timeoutMs;
       let scrolledForRelated = false;
 
       while (Date.now() < deadlineMs) {
-        phaseStats[phaseName].loops += 1;
+        phaseStats.modern.loops += 1;
         const rawEntries = await page.readNetworkCapture?.().catch(() => []) || [];
         const entries = Array.isArray(rawEntries) ? rawEntries.map(normalizeCaptureEntry) : [];
 
         if (entries.length > 0) {
-          vlog(`phase=${phaseName} poll#${phaseStats[phaseName].loops}: entries=${entries.length}`);
+          vlog(`phase=modern poll#${phaseStats.modern.loops}: entries=${entries.length}`);
         }
 
         for (const entry of entries) {
           if (!entry.url.includes('/_/TrendsUi/data/batchexecute')) continue;
-          phaseStats[phaseName].batches += 1;
-          vlog(`phase=${phaseName} capture: status=${entry.status} url=${entry.url}`);
+          phaseStats.modern.batches += 1;
+          vlog(`phase=modern capture: status=${entry.status} url=${entry.url}`);
           if (entry.status === 429) {
             saw429 = true;
-            vlog(`phase=${phaseName} capture: saw HTTP 429`);
+            vlog('phase=modern capture: saw HTTP 429');
             continue;
           }
           if (entry.status < 200 || entry.status >= 300) continue;
@@ -550,8 +593,8 @@ cli({
 
           const timelinePayloads = extractRpcPayloads(entry.responsePreview, 'g4kJzf');
           if (timelinePayloads.length > 0) {
-            phaseStats[phaseName].g4kJzf += timelinePayloads.length;
-            vlog(`phase=${phaseName} g4kJzf payloads=${timelinePayloads.length}`);
+            phaseStats.modern.g4kJzf += timelinePayloads.length;
+            vlog(`phase=modern g4kJzf payloads=${timelinePayloads.length}`);
           }
           for (const payload of timelinePayloads) {
             const key = payloadDedupeKey('g4kJzf', payload);
@@ -569,8 +612,8 @@ cli({
           if (needRelated) {
             const relatedPayloads = extractRpcPayloads(entry.responsePreview, 'fXqlme');
             if (relatedPayloads.length > 0) {
-              phaseStats[phaseName].fXqlme += relatedPayloads.length;
-              vlog(`phase=${phaseName} fXqlme payloads=${relatedPayloads.length}`);
+              phaseStats.modern.fXqlme += relatedPayloads.length;
+              vlog(`phase=modern fXqlme payloads=${relatedPayloads.length}`);
             }
             for (const payload of relatedPayloads) {
               const key = payloadDedupeKey('fXqlme', payload);
@@ -589,12 +632,12 @@ cli({
         const hasTimeline = labels.length > 0 && series.length > 0;
         const hasRelated = !needRelated || related.topDetails.length > 0 || related.risingDetails.length > 0;
         if (hasTimeline && hasRelated) {
-          vlog(`phase=${phaseName} ready: hasTimeline=${hasTimeline}, hasRelated=${hasRelated}`);
+          vlog(`phase=modern ready: hasTimeline=${hasTimeline}, hasRelated=${hasRelated}`);
           return;
         }
 
         // Related-queries RPC (fXqlme) is often lazy-loaded only after scrolling.
-        if (needRelated && hasTimeline && !hasRelated && !scrolledForRelated && phaseStats[phaseName].loops >= 4) {
+        if (needRelated && hasTimeline && !hasRelated && !scrolledForRelated && phaseStats.modern.loops >= 4) {
           try {
             const remainingBeforeResetMs = Math.max(0, deadlineMs - Date.now());
             const pass1 = await forceScrollForRelated(page);
@@ -603,8 +646,8 @@ cli({
             await page.wait(0.7);
             scrolledForRelated = true;
             deadlineMs = Date.now() + timeoutMs;
-            vlog(`phase=${phaseName} triggered lazy related RPC: pass1=${JSON.stringify(pass1)} pass2=${JSON.stringify(pass2)}`);
-            vlog(`phase=${phaseName} deadline reset after scroll: remaining_before_ms=${remainingBeforeResetMs} new_deadline_ts=${deadlineMs}`);
+            vlog(`phase=modern triggered lazy related RPC: pass1=${JSON.stringify(pass1)} pass2=${JSON.stringify(pass2)}`);
+            vlog(`phase=modern deadline reset after scroll: remaining_before_ms=${remainingBeforeResetMs} new_deadline_ts=${deadlineMs}`);
           } catch {
             // Best effort only.
           }
@@ -615,10 +658,131 @@ cli({
       }
     };
 
-    await runPhase('initial', 35_000);
+    const runLegacyPhase = async (timeoutMs) => {
+      const captureEnabledLegacy = await page.startNetworkCapture?.('trends/api/widgetdata').catch(() => false);
+      if (!captureEnabledLegacy) {
+        throw new CliError(
+          'UNSUPPORTED',
+          'Network capture is unavailable for legacy widgetdata fallback',
+          'Enable browser network capture support in your OpenCLI runtime and retry.',
+        );
+      }
+      vlog('network capture switched to legacy widgetdata pattern');
+      await page.goto(legacyExplorePageUrl, { waitUntil: 'load', settleMs: 3000 });
+      await page.wait(1);
+      vlog(`navigated to legacy explore page: ${legacyExplorePageUrl}`);
 
-    if (saw429) {
-      vlog(`phase=initial rate_limited stats=${JSON.stringify(phaseStats.initial)}`);
+      let deadlineMs = Date.now() + timeoutMs;
+      let scrolledForRelated = false;
+      let relatedSettled = !needRelated;
+      while (Date.now() < deadlineMs) {
+        phaseStats.legacy.loops += 1;
+        const rawEntries = await page.readNetworkCapture?.().catch(() => []) || [];
+        const entries = Array.isArray(rawEntries) ? rawEntries.map(normalizeCaptureEntry) : [];
+        if (entries.length > 0) {
+          vlog(`phase=legacy poll#${phaseStats.legacy.loops}: entries=${entries.length}`);
+        }
+
+        for (const entry of entries) {
+          if (entry.url.includes('/trends/api/widgetdata/')) {
+            vlog(`phase=legacy capture: status=${entry.status} url=${entry.url}`);
+          }
+          if (entry.status < 200 || entry.status >= 300) continue;
+          if (!entry.responsePreview) continue;
+          if (entry.status === 429) {
+            saw429 = true;
+            continue;
+          }
+
+          if (entry.url.includes('/trends/api/widgetdata/multiline')) {
+            phaseStats.legacy.multiline += 1;
+            const parsed = parseXssiJson(entry.responsePreview);
+            if (parsed) {
+              const extracted = extractTimelineFromPayload(parsed);
+              if ((extracted.labels?.length || 0) > 0 && (extracted.series?.length || 0) > 0) {
+                labels = extracted.labels;
+                series = extracted.series;
+                vlog(`phase=legacy multiline parsed: labels=${labels.length}, series=${series.length}`);
+              }
+            }
+          }
+
+          if (needRelated && entry.url.includes('/trends/api/widgetdata/relatedsearches')) {
+            phaseStats.legacy.relatedsearches += 1;
+            const parsed = parseXssiJson(entry.responsePreview);
+            const keywordType = getLegacyRelatedKeywordTypeFromUrl(entry.url);
+            if (keywordType !== 'QUERY') {
+              vlog(`phase=legacy related ignored: keywordType=${keywordType} (expect QUERY)`);
+              continue;
+            }
+            const rankedListLen = getLegacyRankedListLength(parsed || {});
+            if (rankedListLen < 2) {
+              vlog(`phase=legacy related ignored: rankedList length=${rankedListLen} (<2)`);
+            } else {
+              if (isLegacyQueryRelatedEmpty(parsed || {})) {
+                related = { top: [], rising: [], topDetails: [], risingDetails: [] };
+                relatedSettled = true;
+                vlog('phase=legacy related parsed: empty rankedKeyword accepted as target');
+              } else {
+                const extractedRelated = parseRelatedRanks(parsed || {});
+                if ((extractedRelated.topDetails.length + extractedRelated.risingDetails.length) > 0) {
+                  related = extractedRelated;
+                  relatedSettled = true;
+                  vlog(`phase=legacy related parsed: top=${related.top.length}, rising=${related.rising.length}, topDetails=${related.topDetails.length}, risingDetails=${related.risingDetails.length}`);
+                } else {
+                  vlog('phase=legacy related parsed with rankedList>=2 but no usable rows; waiting for next response');
+                }
+              }
+            }
+          }
+        }
+
+        const hasTimeline = labels.length > 0 && series.length > 0;
+        const hasRelated = !needRelated || relatedSettled;
+        if (hasTimeline && hasRelated) return;
+
+        // Legacy relatedsearches is sometimes lazy/refreshed after user interaction.
+        if (needRelated && hasTimeline && !hasRelated && !scrolledForRelated && phaseStats.legacy.loops >= 3) {
+          try {
+            const remainingBeforeResetMs = Math.max(0, deadlineMs - Date.now());
+            const pass1 = await forceScrollForRelated(page);
+            await page.wait(0.7);
+            const pass2 = await forceScrollForRelated(page);
+            await page.wait(0.7);
+            scrolledForRelated = true;
+            deadlineMs = Date.now() + timeoutMs;
+            vlog(`phase=legacy triggered related refresh by scroll: pass1=${JSON.stringify(pass1)} pass2=${JSON.stringify(pass2)}`);
+            vlog(`phase=legacy deadline reset after scroll: remaining_before_ms=${remainingBeforeResetMs} new_deadline_ts=${deadlineMs}`);
+          } catch {
+            // Best effort only.
+          }
+        }
+        if (saw429) return;
+        await page.wait(0.5);
+      }
+    };
+
+    if (!forceLegacy) {
+      const capturePattern = 'TrendsUi/data/batchexecute';
+      const captureEnabled = await page.startNetworkCapture?.(capturePattern).catch(() => false);
+      if (!captureEnabled) {
+        throw new CliError(
+          'UNSUPPORTED',
+          'Network capture is unavailable for google/trends-explore',
+          'Enable browser network capture support in your OpenCLI runtime and retry.',
+        );
+      }
+      vlog(`network capture enabled with pattern="${capturePattern}"`);
+      await page.goto(explorePageUrl, { waitUntil: 'load', settleMs: 3000 });
+      await page.wait(1);
+      vlog(`navigated to explore page: ${explorePageUrl}`);
+      await runModernPhase(20_000);
+    } else {
+      vlog('force-legacy=true, skipping modern phase');
+    }
+
+    if (!forceLegacy && saw429) {
+      vlog(`phase=modern rate_limited stats=${JSON.stringify(phaseStats.modern)}`);
       throw new CliError(
         'RATE_LIMIT',
         'Google Trends rate limited this request (HTTP 429)',
@@ -626,26 +790,13 @@ cli({
       );
     }
 
-    const hasTimelineAfterInitial = labels.length > 0 && series.length > 0;
-    if (!hasTimelineAfterInitial) {
-      usedReloadRetry = true;
-      vlog(`phase=initial missing g4kJzf, reloading page via CDP; stats=${JSON.stringify(phaseStats.initial)}`);
-      try {
-        await page.cdp?.('Page.reload', { ignoreCache: true });
-      } catch (err) {
-        throw new CliError(
-          'UNKNOWN',
-          'Failed to reload Trends page for g4kJzf retry',
-          `CDP Page.reload failed: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      }
-      await page.wait(2);
-      await runPhase('reload', 20_000);
+    if (forceLegacy || labels.length === 0 || series.length === 0) {
+      vlog(`phase=modern missing timeline, switching to legacy fallback; stats=${JSON.stringify(phaseStats.modern)}`);
+      await runLegacyPhase(20_000);
     }
 
     if (saw429) {
-      const stats = usedReloadRetry ? { ...phaseStats.initial, reload: phaseStats.reload } : phaseStats.initial;
-      vlog(`rate_limited stats=${JSON.stringify(stats)}`);
+      vlog(`rate_limited stats=${JSON.stringify(phaseStats)}`);
       throw new CliError(
         'RATE_LIMIT',
         'Google Trends rate limited this request (HTTP 429)',
@@ -654,31 +805,19 @@ cli({
     }
 
     if (labels.length === 0 || series.length === 0) {
-      vlog(`failed: g4kJzf missing after retry=${usedReloadRetry}, initial=${JSON.stringify(phaseStats.initial)}, reload=${JSON.stringify(phaseStats.reload)}`);
-      if (usedReloadRetry) {
-        throw new CliError(
-          'UNKNOWN',
-          'Failed to capture Trends timeline RPC g4kJzf after reload retry',
-          'Run with --verbose and verify batchexecute responses are present and not blocked.',
-        );
-      }
+      vlog(`failed: timeline missing after modern+legacy fallback stats=${JSON.stringify(phaseStats)}`);
       throw new CliError(
         'UNKNOWN',
-        'Failed to capture Trends timeline RPC g4kJzf',
-        'Open the Explore page manually first and retry, or run with a longer timeout.',
+        'Failed to capture Trends timeline from modern RPC and legacy widgetdata fallback',
+        'Run with --verbose and verify batchexecute/widgetdata responses are present and not blocked.',
       );
     }
 
     if (needRelated && related.topDetails.length === 0 && related.risingDetails.length === 0) {
-      vlog(`failed: fXqlme missing initial=${JSON.stringify(phaseStats.initial)}, reload=${JSON.stringify(phaseStats.reload)}`);
-      throw new CliError(
-        'UNKNOWN',
-        'Failed to capture related-queries RPC fXqlme while --details=true',
-        'Retry with --verbose and scroll the related queries section before running again.',
-      );
+      vlog(`related details missing after modern+legacy capture; timeline preserved. stats=${JSON.stringify(phaseStats)}`);
     }
 
-    vlog(`stats initial=${JSON.stringify(phaseStats.initial)} reload=${JSON.stringify(phaseStats.reload)} usedReloadRetry=${usedReloadRetry}`);
+    vlog(`stats=${JSON.stringify(phaseStats)}`);
     vlog(`success: labels=${labels.length}, series=${series.length}, includeRelatedDetails=${includeRelatedDetails}`);
 
     if (queries.length === 1) {

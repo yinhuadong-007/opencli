@@ -9684,6 +9684,13 @@
         "help": "Include top_details and rising_details in trend_json (default: false)"
       },
       {
+        "name": "force_legacy",
+        "type": "boolean",
+        "default": false,
+        "required": false,
+        "help": "Force legacy fallback mode for testing (/trends/api/widgetdata/* capture)"
+      },
+      {
         "name": "hl",
         "type": "string",
         "default": "en-US",
