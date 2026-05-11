@@ -678,12 +678,18 @@ export async function startNetworkCapture(
   pattern?: string,
 ): Promise<void> {
   await ensureAttached(tabId);
-  await chrome.debugger.sendCommand({ tabId }, 'Network.enable');
-  networkCaptures.set(tabId, {
+  const state: NetworkCaptureState = {
     patterns: normalizeCapturePatterns(pattern),
     entries: [],
     requestToIndex: new Map(),
-  });
+  };
+  networkCaptures.set(tabId, state);
+  try {
+    await chrome.debugger.sendCommand({ tabId }, 'Network.enable');
+  } catch (err) {
+    if (networkCaptures.get(tabId) === state) networkCaptures.delete(tabId);
+    throw err;
+  }
 }
 
 export async function readNetworkCapture(tabId: number): Promise<NetworkCaptureEntry[]> {

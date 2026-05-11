@@ -253,7 +253,11 @@ export class Page extends BasePage {
       const result = await sendCommand('network-capture-read', {
         ...this._cmdOpts(),
       });
-      return Array.isArray(result) ? result : [];
+      if (Array.isArray(result)) return result;
+      if (result && typeof result === 'object' && Array.isArray((result as { data?: unknown }).data)) {
+        return (result as { data: unknown[] }).data;
+      }
+      return [];
     } catch (err) {
       if (!isUnsupportedNetworkCaptureError(err)) throw err;
       this._markUnsupportedNetworkCapture();

@@ -134,6 +134,15 @@ describe('Page network capture compatibility', () => {
     }));
   });
 
+  it('unwraps page-scoped network capture results from the extension', async () => {
+    const entries = [{ url: 'https://example.com/api', method: 'GET' }];
+    sendCommandMock.mockResolvedValueOnce({ session: 'notebooklm', data: entries });
+
+    const page = new Page('notebooklm', undefined, undefined, undefined, 'adapter');
+
+    await expect(page.readNetworkCapture()).resolves.toEqual(entries);
+  });
+
   it('rethrows unrelated network capture failures', async () => {
     sendCommandMock.mockRejectedValueOnce(new Error('Extension disconnected'));
 
