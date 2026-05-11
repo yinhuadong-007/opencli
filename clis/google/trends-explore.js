@@ -507,6 +507,13 @@ cli({
       default: false,
       help: 'Force legacy fallback mode for testing (/trends/api/widgetdata/* capture)',
     },
+    {
+      name: 'legacy_fallback',
+      type: 'boolean',
+      required: false,
+      default: true,
+      help: 'When modern capture has no timeline, fallback to legacy widgetdata (default: true)',
+    },
     { name: 'hl', type: 'string', default: 'en-US', help: 'UI language (e.g. en-US, zh-CN)' },
     { name: 'tz', type: 'int', default: -480, help: 'Timezone offset minutes (e.g. -480 for PT)' },
   ],
@@ -528,6 +535,7 @@ cli({
     const date = String(kwargs.date || 'now 7-d').trim();
     const includeRelatedDetails = Boolean(kwargs.details ?? false);
     const forceLegacy = Boolean(kwargs.force_legacy ?? kwargs['force-legacy'] ?? false);
+    const legacyFallbackEnabled = Boolean(kwargs.legacy_fallback ?? kwargs['legacy-fallback'] ?? true);
     const hl = String(kwargs.hl || 'en-US').trim() || 'en-US';
     const tz = Number(kwargs.tz ?? -480);
 
@@ -790,8 +798,9 @@ cli({
       );
     }
 
-    if (forceLegacy || labels.length === 0 || series.length === 0) {
-      vlog(`phase=modern missing timeline, switching to legacy fallback; stats=${JSON.stringify(phaseStats.modern)}`);
+    const modernTimelineMissing = labels.length === 0 || series.length === 0;
+    if (forceLegacy || (modernTimelineMissing && legacyFallbackEnabled)) {
+      vlog(`phase=modern switching to legacy fallback; modernTimelineMissing=${modernTimelineMissing} forceLegacy=${forceLegacy} stats=${JSON.stringify(phaseStats.modern)}`);
       await runLegacyPhase(20_000);
     }
 
@@ -805,6 +814,14 @@ cli({
     }
 
     if (labels.length === 0 || series.length === 0) {
+      if (!forceLegacy && !legacyFallbackEnabled && modernTimelineMissing) {
+        vlog(`failed: timeline missing in modern phase and legacy fallback disabled stats=${JSON.stringify(phaseStats)}`);
+        throw new CliError(
+          'UNKNOWN',
+          'Failed to capture Trends timeline from modern RPC (legacy fallback disabled)',
+          'Enable --legacy-fallback or run with --force-legacy, then retry with --verbose to inspect capture logs.',
+        );
+      }
       vlog(`failed: timeline missing after modern+legacy fallback stats=${JSON.stringify(phaseStats)}`);
       throw new CliError(
         'UNKNOWN',
