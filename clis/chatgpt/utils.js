@@ -12,15 +12,23 @@ export const CHATGPT_URL = 'https://chatgpt.com';
 // Selectors
 const COMPOSER_SELECTORS = [
     '[aria-label="Chat with ChatGPT"]',
+    '[aria-label="与 ChatGPT 聊天"]',
     '[placeholder="Ask anything"]',
+    '[placeholder="有问题，尽管问"]',
     '#prompt-textarea',
     '[data-testid="prompt-textarea"]',
     '[contenteditable="true"][role="textbox"]',
 ];
+const SEND_BUTTON_SELECTOR = 'button[data-testid="send-button"]:not([disabled])';
 const SEND_BUTTON_LABELS = [
     'Send prompt',
     'Send message',
     'Send',
+    '发送提示',
+];
+const CLOSE_SIDEBAR_LABELS = [
+    'Close sidebar',
+    '关闭边栏',
 ];
 
 function isSameChatGPTConversation(currentUrl, expectedUrl) {
@@ -119,16 +127,34 @@ export async function isOnChatGPT(page) {
     }
 }
 
+// Comma-joined CSS selector list passed to page.wait({ selector }) so the
+// wait succeeds as soon as any composer flavour mounts (querySelectorAll
+// matches all of them). Tracks the most stable subset of COMPOSER_SELECTORS;
+// we only need to know "the composer is ready", not which variant rendered.
+const COMPOSER_WAIT_SELECTOR = '#prompt-textarea, [data-testid="prompt-textarea"]';
+const CONVERSATION_LINK_SELECTOR = 'a[href*="/c/"]';
+// Selector used by detail.js to wait for at least one rendered message bubble
+// after navigating to /c/<id>; mirrors the markup queried by getVisibleMessages.
+export const CONVERSATION_MESSAGE_SELECTOR = '[data-message-author-role], article[data-testid*="conversation-turn"]';
+
 export async function ensureOnChatGPT(page) {
     if (await isOnChatGPT(page)) return false;
     await page.goto(CHATGPT_URL, { settleMs: 2000 });
-    await page.wait(2);
+    try {
+        await page.wait({ selector: COMPOSER_WAIT_SELECTOR, timeout: 8 });
+    } catch {
+        // Composer didn't mount; downstream ensureChatGPTLogin / ensureChatGPTComposer surfaces a typed error.
+    }
     return true;
 }
 
 export async function startNewChat(page) {
     await page.goto(`${CHATGPT_URL}/new`, { settleMs: 2000 });
-    await page.wait(2);
+    try {
+        await page.wait({ selector: COMPOSER_WAIT_SELECTOR, timeout: 8 });
+    } catch {
+        // Composer didn't mount; downstream ensureChatGPTComposer surfaces a typed error.
+    }
 }
 
 export async function getPageState(page) {
@@ -185,15 +211,16 @@ export async function sendChatGPTMessage(page, text) {
     // Close sidebar if open (it can cover the chat composer)
     await page.evaluate(`
         (() => {
-            const closeBtn = Array.from(document.querySelectorAll('button')).find(b => b.getAttribute('aria-label') === 'Close sidebar');
+            const labels = ${JSON.stringify(CLOSE_SIDEBAR_LABELS)};
+            const closeBtn = Array.from(document.querySelectorAll('button')).find(b => labels.includes(b.getAttribute('aria-label') || ''));
             if (closeBtn) closeBtn.click();
         })()
     `);
-    await page.wait(0.5);
+    // The previous 0.5 s + 1.5 s pre-composer settles are dropped: the next
+    // page.evaluate roundtrip flushes the close-sidebar React update and
+    // findComposer() retries inside a single CDP call, so no fixed sleep is
+    // needed before reading the composer.
 
-    // Wait for composer to be ready and use Playwright's type()
-    await page.wait(1.5);
-    
     const typeResult = await page.evaluate(`
         (() => {
             ${buildComposerLocatorScript()}
@@ -234,9 +261,10 @@ export async function sendChatGPTMessage(page, text) {
     // Click send button
     const sent = await page.evaluate(`
         (() => {
+            const primary = document.querySelector(${JSON.stringify(SEND_BUTTON_SELECTOR)});
             const btns = Array.from(document.querySelectorAll('button'));
             const labels = ${JSON.stringify(SEND_BUTTON_LABELS)};
-            const sendBtn = btns.find(b => labels.includes(b.getAttribute('aria-label') || '') && !b.disabled);
+            const sendBtn = primary || btns.find(b => labels.includes(b.getAttribute('aria-label') || '') && !b.disabled);
             return { sendBtnFound: !!sendBtn };
         })()
     `);
@@ -247,8 +275,9 @@ export async function sendChatGPTMessage(page, text) {
     
     await page.evaluate(`
         (() => {
+            const primary = document.querySelector(${JSON.stringify(SEND_BUTTON_SELECTOR)});
             const labels = ${JSON.stringify(SEND_BUTTON_LABELS)};
-            const sendBtn = Array.from(document.querySelectorAll('button')).find(b => labels.includes(b.getAttribute('aria-label') || '') && !b.disabled);
+            const sendBtn = primary || Array.from(document.querySelectorAll('button')).find(b => labels.includes(b.getAttribute('aria-label') || '') && !b.disabled);
             if (sendBtn) sendBtn.click();
         })()
     `);
@@ -361,8 +390,9 @@ export async function waitForChatGPTResponse(page, baselineCount, prompt, timeou
 }
 
 export async function getConversationList(page) {
+    // ensureOnChatGPT already waits for the composer selector after navigation,
+    // so the previous standalone 2 s settle is redundant.
     await ensureOnChatGPT(page);
-    await page.wait(2);
 
     const openSidebar = await page.evaluate(`(() => {
         const button = Array.from(document.querySelectorAll('button'))
@@ -373,12 +403,22 @@ export async function getConversationList(page) {
         }
         return false;
     })()`);
-    if (openSidebar) await page.wait(1);
+    if (openSidebar) {
+        try {
+            await page.wait({ selector: CONVERSATION_LINK_SELECTOR, timeout: 3 });
+        } catch {
+            // Sidebar slide-in didn't surface conversation links; extractConversationLinks below tolerates empty and falls back to home goto.
+        }
+    }
 
     let items = await extractConversationLinks(page);
     if (!items.length) {
         await page.goto(CHATGPT_URL, { settleMs: 2000 });
-        await page.wait(2);
+        try {
+            await page.wait({ selector: CONVERSATION_LINK_SELECTOR, timeout: 8 });
+        } catch {
+            // No conversation links visible after fallback goto; extractConversationLinks returns empty.
+        }
         items = await extractConversationLinks(page);
     }
 
@@ -532,7 +572,9 @@ export async function waitForChatGPTImages(page, beforeUrls, timeoutSeconds, con
 
 export const __test__ = {
     COMPOSER_SELECTORS,
+    SEND_BUTTON_SELECTOR,
     SEND_BUTTON_LABELS,
+    CLOSE_SIDEBAR_LABELS,
     isSameChatGPTConversation,
     parseChatGPTConversationId,
 };

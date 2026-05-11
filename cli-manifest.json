@@ -4160,9 +4160,7 @@
     "modulePath": "chatgpt/ask.js",
     "sourceFile": "chatgpt/ask.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "chatgpt",
@@ -4197,9 +4195,7 @@
     "modulePath": "chatgpt/detail.js",
     "sourceFile": "chatgpt/detail.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "chatgpt",
@@ -4228,9 +4224,7 @@
     "modulePath": "chatgpt/history.js",
     "sourceFile": "chatgpt/history.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "chatgpt",
@@ -4279,9 +4273,7 @@
     "modulePath": "chatgpt/image.js",
     "sourceFile": "chatgpt/image.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "chatgpt",
@@ -4299,9 +4291,7 @@
     "modulePath": "chatgpt/new.js",
     "sourceFile": "chatgpt/new.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "chatgpt",
@@ -4329,9 +4319,7 @@
     "modulePath": "chatgpt/read.js",
     "sourceFile": "chatgpt/read.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "chatgpt",
@@ -4365,9 +4353,7 @@
     "modulePath": "chatgpt/send.js",
     "sourceFile": "chatgpt/send.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "chatgpt",
@@ -4387,9 +4373,7 @@
     "modulePath": "chatgpt/status.js",
     "sourceFile": "chatgpt/status.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "chatgpt-app",
@@ -4824,9 +4808,7 @@
     "modulePath": "claude/ask.js",
     "sourceFile": "claude/ask.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "claude",
@@ -4854,9 +4836,7 @@
     "modulePath": "claude/detail.js",
     "sourceFile": "claude/detail.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "claude",
@@ -4885,9 +4865,7 @@
     "modulePath": "claude/history.js",
     "sourceFile": "claude/history.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "claude",
@@ -4905,9 +4883,7 @@
     "modulePath": "claude/new.js",
     "sourceFile": "claude/new.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "claude",
@@ -4927,9 +4903,7 @@
     "modulePath": "claude/read.js",
     "sourceFile": "claude/read.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "claude",
@@ -4964,9 +4938,7 @@
     "modulePath": "claude/send.js",
     "sourceFile": "claude/send.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "claude",
@@ -4986,9 +4958,7 @@
     "modulePath": "claude/status.js",
     "sourceFile": "claude/status.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "cnki",
@@ -6445,9 +6415,7 @@
     "modulePath": "deepseek/ask.js",
     "sourceFile": "deepseek/ask.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "deepseek",
@@ -6474,9 +6442,7 @@
     "modulePath": "deepseek/detail.js",
     "sourceFile": "deepseek/detail.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "deepseek",
@@ -6504,9 +6470,7 @@
     "modulePath": "deepseek/history.js",
     "sourceFile": "deepseek/history.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "deepseek",
@@ -6524,9 +6488,7 @@
     "modulePath": "deepseek/new.js",
     "sourceFile": "deepseek/new.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "deepseek",
@@ -6545,9 +6507,7 @@
     "modulePath": "deepseek/read.js",
     "sourceFile": "deepseek/read.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "deepseek",
@@ -6588,9 +6548,7 @@
     "modulePath": "deepseek/send.js",
     "sourceFile": "deepseek/send.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "deepseek",
@@ -6610,9 +6568,7 @@
     "modulePath": "deepseek/status.js",
     "sourceFile": "deepseek/status.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "defillama",
@@ -6896,7 +6852,7 @@
         "name": "city",
         "type": "str",
         "required": false,
-        "help": "城市名（北京/上海/beijing/...）或 cityId 数字。不传则使用 cookie 默认城市"
+        "help": "城市名（北京/上海/汕头/beijing/shantou/...）或 cityId 数字。未在静态表中的城市会通过 dianping.com 在线解析。不传则使用 cookie 默认城市"
       },
       {
         "name": "limit",
@@ -7703,9 +7659,7 @@
     "modulePath": "doubao/ask.js",
     "sourceFile": "doubao/ask.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "doubao",
@@ -7732,9 +7686,7 @@
     "modulePath": "doubao/detail.js",
     "sourceFile": "doubao/detail.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "doubao",
@@ -7763,9 +7715,7 @@
     "modulePath": "doubao/history.js",
     "sourceFile": "doubao/history.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "doubao",
@@ -7799,9 +7749,7 @@
     "modulePath": "doubao/meeting-summary.js",
     "sourceFile": "doubao/meeting-summary.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "doubao",
@@ -7835,9 +7783,7 @@
     "modulePath": "doubao/meeting-transcript.js",
     "sourceFile": "doubao/meeting-transcript.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "doubao",
@@ -7856,9 +7802,7 @@
     "modulePath": "doubao/new.js",
     "sourceFile": "doubao/new.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "doubao",
@@ -7877,9 +7821,7 @@
     "modulePath": "doubao/read.js",
     "sourceFile": "doubao/read.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "doubao",
@@ -7907,9 +7849,7 @@
     "modulePath": "doubao/send.js",
     "sourceFile": "doubao/send.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "doubao",
@@ -7930,9 +7870,7 @@
     "modulePath": "doubao/status.js",
     "sourceFile": "doubao/status.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "doubao-app",
@@ -9712,9 +9650,7 @@
     "modulePath": "gemini/ask.js",
     "sourceFile": "gemini/ask.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "gemini",
@@ -9761,9 +9697,7 @@
     "modulePath": "gemini/deep-research.js",
     "sourceFile": "gemini/deep-research.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "gemini",
@@ -9808,9 +9742,7 @@
     "modulePath": "gemini/deep-research-result.js",
     "sourceFile": "gemini/deep-research-result.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "gemini",
@@ -9874,9 +9806,7 @@
     "modulePath": "gemini/image.js",
     "sourceFile": "gemini/image.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "gemini",
@@ -9895,9 +9825,7 @@
     "modulePath": "gemini/new.js",
     "sourceFile": "gemini/new.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "gitee",
@@ -10606,9 +10534,7 @@
     "modulePath": "grok/ask.js",
     "sourceFile": "grok/ask.js",
     "navigateBefore": "https://grok.com",
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "grok",
@@ -10642,9 +10568,7 @@
     "modulePath": "grok/detail.js",
     "sourceFile": "grok/detail.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "grok",
@@ -10672,9 +10596,7 @@
     "modulePath": "grok/history.js",
     "sourceFile": "grok/history.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "grok",
@@ -10731,9 +10653,7 @@
     "modulePath": "grok/image.js",
     "sourceFile": "grok/image.js",
     "navigateBefore": "https://grok.com",
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "grok",
@@ -10751,9 +10671,7 @@
     "modulePath": "grok/new.js",
     "sourceFile": "grok/new.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "grok",
@@ -10780,9 +10698,7 @@
     "modulePath": "grok/read.js",
     "sourceFile": "grok/read.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "grok",
@@ -10816,9 +10732,7 @@
     "modulePath": "grok/send.js",
     "sourceFile": "grok/send.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "grok",
@@ -10840,9 +10754,7 @@
     "modulePath": "grok/status.js",
     "sourceFile": "grok/status.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "hackernews",
@@ -15831,7 +15743,7 @@
     "aliases": [
       "select"
     ],
-    "description": "Open one NotebookLM notebook in the automation workspace by id or URL",
+    "description": "Open one NotebookLM notebook in the adapter session by id or URL",
     "access": "read",
     "domain": "notebooklm.google.com",
     "strategy": "cookie",
@@ -17478,6 +17390,43 @@
   },
   {
     "site": "openreview",
+    "name": "author",
+    "description": "List OpenReview submissions by an author profile id (newest first)",
+    "access": "read",
+    "domain": "openreview.net",
+    "strategy": "public",
+    "browser": false,
+    "args": [
+      {
+        "name": "profile",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "OpenReview profile id (e.g. \"~Yoshua_Bengio1\"). Find it on the author profile URL on openreview.net."
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 50,
+        "required": false,
+        "help": "Max submissions (1-1000)"
+      }
+    ],
+    "columns": [
+      "rank",
+      "id",
+      "title",
+      "authors",
+      "venue",
+      "pdate",
+      "url"
+    ],
+    "type": "js",
+    "modulePath": "openreview/author.js",
+    "sourceFile": "openreview/author.js"
+  },
+  {
+    "site": "openreview",
     "name": "paper",
     "description": "Show full metadata for a single OpenReview paper",
     "access": "read",
@@ -19121,9 +19070,7 @@
     "modulePath": "qwen/ask.js",
     "sourceFile": "qwen/ask.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "qwen",
@@ -19157,9 +19104,7 @@
     "modulePath": "qwen/detail.js",
     "sourceFile": "qwen/detail.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "qwen",
@@ -19188,9 +19133,7 @@
     "modulePath": "qwen/history.js",
     "sourceFile": "qwen/history.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "qwen",
@@ -19247,9 +19190,7 @@
     "modulePath": "qwen/image.js",
     "sourceFile": "qwen/image.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "qwen",
@@ -19267,9 +19208,7 @@
     "modulePath": "qwen/new.js",
     "sourceFile": "qwen/new.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "qwen",
@@ -19296,9 +19235,7 @@
     "modulePath": "qwen/read.js",
     "sourceFile": "qwen/read.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "qwen",
@@ -19346,9 +19283,7 @@
     "modulePath": "qwen/send.js",
     "sourceFile": "qwen/send.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "qwen",
@@ -19370,9 +19305,7 @@
     "modulePath": "qwen/status.js",
     "sourceFile": "qwen/status.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "reddit",
@@ -19405,7 +19338,8 @@
     "type": "js",
     "modulePath": "reddit/comment.js",
     "sourceFile": "reddit/comment.js",
-    "navigateBefore": "https://reddit.com"
+    "navigateBefore": "https://reddit.com",
+    "siteSession": "persistent"
   },
   {
     "site": "reddit",
@@ -19435,7 +19369,8 @@
     "type": "js",
     "modulePath": "reddit/frontpage.js",
     "sourceFile": "reddit/frontpage.js",
-    "navigateBefore": "https://reddit.com"
+    "navigateBefore": "https://reddit.com",
+    "siteSession": "persistent"
   },
   {
     "site": "reddit",
@@ -19504,7 +19439,8 @@
     "type": "js",
     "modulePath": "reddit/popular.js",
     "sourceFile": "reddit/popular.js",
-    "navigateBefore": "https://reddit.com"
+    "navigateBefore": "https://reddit.com",
+    "siteSession": "persistent"
   },
   {
     "site": "reddit",
@@ -19568,7 +19504,12 @@
     "type": "js",
     "modulePath": "reddit/read.js",
     "sourceFile": "reddit/read.js",
+<<<<<<< HEAD
     "navigateBefore": false
+=======
+    "navigateBefore": "https://reddit.com",
+    "siteSession": "persistent"
+>>>>>>> upstream/main
   },
   {
     "site": "reddit",
@@ -19601,7 +19542,8 @@
     "type": "js",
     "modulePath": "reddit/save.js",
     "sourceFile": "reddit/save.js",
-    "navigateBefore": "https://reddit.com"
+    "navigateBefore": "https://reddit.com",
+    "siteSession": "persistent"
   },
   {
     "site": "reddit",
@@ -19630,7 +19572,8 @@
     "type": "js",
     "modulePath": "reddit/saved.js",
     "sourceFile": "reddit/saved.js",
-    "navigateBefore": "https://reddit.com"
+    "navigateBefore": "https://reddit.com",
+    "siteSession": "persistent"
   },
   {
     "site": "reddit",
@@ -19688,7 +19631,8 @@
     "type": "js",
     "modulePath": "reddit/search.js",
     "sourceFile": "reddit/search.js",
-    "navigateBefore": "https://reddit.com"
+    "navigateBefore": "https://reddit.com",
+    "siteSession": "persistent"
   },
   {
     "site": "reddit",
@@ -19841,7 +19785,8 @@
     "type": "js",
     "modulePath": "reddit/subreddit.js",
     "sourceFile": "reddit/subreddit.js",
-    "navigateBefore": "https://reddit.com"
+    "navigateBefore": "https://reddit.com",
+    "siteSession": "persistent"
   },
   {
     "site": "reddit",
@@ -19874,7 +19819,8 @@
     "type": "js",
     "modulePath": "reddit/subscribe.js",
     "sourceFile": "reddit/subscribe.js",
-    "navigateBefore": "https://reddit.com"
+    "navigateBefore": "https://reddit.com",
+    "siteSession": "persistent"
   },
   {
     "site": "reddit",
@@ -19907,7 +19853,8 @@
     "type": "js",
     "modulePath": "reddit/upvote.js",
     "sourceFile": "reddit/upvote.js",
-    "navigateBefore": "https://reddit.com"
+    "navigateBefore": "https://reddit.com",
+    "siteSession": "persistent"
   },
   {
     "site": "reddit",
@@ -19936,7 +19883,8 @@
     "type": "js",
     "modulePath": "reddit/upvoted.js",
     "sourceFile": "reddit/upvoted.js",
-    "navigateBefore": "https://reddit.com"
+    "navigateBefore": "https://reddit.com",
+    "siteSession": "persistent"
   },
   {
     "site": "reddit",
@@ -19962,7 +19910,8 @@
     "type": "js",
     "modulePath": "reddit/user.js",
     "sourceFile": "reddit/user.js",
-    "navigateBefore": "https://reddit.com"
+    "navigateBefore": "https://reddit.com",
+    "siteSession": "persistent"
   },
   {
     "site": "reddit",
@@ -19997,7 +19946,8 @@
     "type": "js",
     "modulePath": "reddit/user-comments.js",
     "sourceFile": "reddit/user-comments.js",
-    "navigateBefore": "https://reddit.com"
+    "navigateBefore": "https://reddit.com",
+    "siteSession": "persistent"
   },
   {
     "site": "reddit",
@@ -20033,7 +19983,8 @@
     "type": "js",
     "modulePath": "reddit/user-posts.js",
     "sourceFile": "reddit/user-posts.js",
-    "navigateBefore": "https://reddit.com"
+    "navigateBefore": "https://reddit.com",
+    "siteSession": "persistent"
   },
   {
     "site": "rest-countries",
@@ -22574,7 +22525,8 @@
     "type": "js",
     "modulePath": "twitter/article.js",
     "sourceFile": "twitter/article.js",
-    "navigateBefore": "https://x.com"
+    "navigateBefore": "https://x.com",
+    "siteSession": "persistent"
   },
   {
     "site": "twitter",
@@ -22672,7 +22624,8 @@
     "type": "js",
     "modulePath": "twitter/bookmark-folder.js",
     "sourceFile": "twitter/bookmark-folder.js",
-    "navigateBefore": "https://x.com"
+    "navigateBefore": "https://x.com",
+    "siteSession": "persistent"
   },
   {
     "site": "twitter",
@@ -22692,7 +22645,8 @@
     "type": "js",
     "modulePath": "twitter/bookmark-folders.js",
     "sourceFile": "twitter/bookmark-folders.js",
-    "navigateBefore": "https://x.com"
+    "navigateBefore": "https://x.com",
+    "siteSession": "persistent"
   },
   {
     "site": "twitter",
@@ -22731,7 +22685,8 @@
     "type": "js",
     "modulePath": "twitter/bookmarks.js",
     "sourceFile": "twitter/bookmarks.js",
-    "navigateBefore": "https://x.com"
+    "navigateBefore": "https://x.com",
+    "siteSession": "persistent"
   },
   {
     "site": "twitter",
@@ -22805,7 +22760,8 @@
     "type": "js",
     "modulePath": "twitter/download.js",
     "sourceFile": "twitter/download.js",
-    "navigateBefore": "https://x.com"
+    "navigateBefore": "https://x.com",
+    "siteSession": "persistent"
   },
   {
     "site": "twitter",
@@ -22865,7 +22821,8 @@
     "type": "js",
     "modulePath": "twitter/followers.js",
     "sourceFile": "twitter/followers.js",
-    "navigateBefore": true
+    "navigateBefore": true,
+    "siteSession": "persistent"
   },
   {
     "site": "twitter",
@@ -22900,7 +22857,8 @@
     "type": "js",
     "modulePath": "twitter/following.js",
     "sourceFile": "twitter/following.js",
-    "navigateBefore": "https://x.com"
+    "navigateBefore": "https://x.com",
+    "siteSession": "persistent"
   },
   {
     "site": "twitter",
@@ -23000,7 +22958,8 @@
     "type": "js",
     "modulePath": "twitter/likes.js",
     "sourceFile": "twitter/likes.js",
-    "navigateBefore": "https://x.com"
+    "navigateBefore": "https://x.com",
+    "siteSession": "persistent"
   },
   {
     "site": "twitter",
@@ -23118,7 +23077,8 @@
     "type": "js",
     "modulePath": "twitter/list-tweets.js",
     "sourceFile": "twitter/list-tweets.js",
-    "navigateBefore": "https://x.com"
+    "navigateBefore": "https://x.com",
+    "siteSession": "persistent"
   },
   {
     "site": "twitter",
@@ -23147,7 +23107,8 @@
     "type": "js",
     "modulePath": "twitter/lists.js",
     "sourceFile": "twitter/lists.js",
-    "navigateBefore": "https://x.com"
+    "navigateBefore": "https://x.com",
+    "siteSession": "persistent"
   },
   {
     "site": "twitter",
@@ -23176,7 +23137,8 @@
     "type": "js",
     "modulePath": "twitter/notifications.js",
     "sourceFile": "twitter/notifications.js",
-    "navigateBefore": true
+    "navigateBefore": true,
+    "siteSession": "persistent"
   },
   {
     "site": "twitter",
@@ -23244,7 +23206,8 @@
     "type": "js",
     "modulePath": "twitter/profile.js",
     "sourceFile": "twitter/profile.js",
-    "navigateBefore": "https://x.com"
+    "navigateBefore": "https://x.com",
+    "siteSession": "persistent"
   },
   {
     "site": "twitter",
@@ -23512,7 +23475,8 @@
     "type": "js",
     "modulePath": "twitter/search.js",
     "sourceFile": "twitter/search.js",
-    "navigateBefore": true
+    "navigateBefore": true,
+    "siteSession": "persistent"
   },
   {
     "site": "twitter",
@@ -23558,7 +23522,8 @@
     "type": "js",
     "modulePath": "twitter/thread.js",
     "sourceFile": "twitter/thread.js",
-    "navigateBefore": "https://x.com"
+    "navigateBefore": "https://x.com",
+    "siteSession": "persistent"
   },
   {
     "site": "twitter",
@@ -23611,7 +23576,8 @@
     "type": "js",
     "modulePath": "twitter/timeline.js",
     "sourceFile": "twitter/timeline.js",
-    "navigateBefore": "https://x.com"
+    "navigateBefore": "https://x.com",
+    "siteSession": "persistent"
   },
   {
     "site": "twitter",
@@ -23638,7 +23604,8 @@
     "type": "js",
     "modulePath": "twitter/trending.js",
     "sourceFile": "twitter/trending.js",
-    "navigateBefore": "https://x.com"
+    "navigateBefore": "https://x.com",
+    "siteSession": "persistent"
   },
   {
     "site": "twitter",
@@ -23688,7 +23655,8 @@
     "type": "js",
     "modulePath": "twitter/tweets.js",
     "sourceFile": "twitter/tweets.js",
-    "navigateBefore": "https://x.com"
+    "navigateBefore": "https://x.com",
+    "siteSession": "persistent"
   },
   {
     "site": "twitter",
@@ -27943,9 +27911,7 @@
     "modulePath": "yuanbao/ask.js",
     "sourceFile": "yuanbao/ask.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "yuanbao",
@@ -27972,9 +27938,7 @@
     "modulePath": "yuanbao/detail.js",
     "sourceFile": "yuanbao/detail.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "yuanbao",
@@ -28004,9 +27968,7 @@
     "modulePath": "yuanbao/history.js",
     "sourceFile": "yuanbao/history.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "yuanbao",
@@ -28025,9 +27987,7 @@
     "modulePath": "yuanbao/new.js",
     "sourceFile": "yuanbao/new.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "yuanbao",
@@ -28046,9 +28006,7 @@
     "modulePath": "yuanbao/read.js",
     "sourceFile": "yuanbao/read.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "yuanbao",
@@ -28082,9 +28040,7 @@
     "modulePath": "yuanbao/send.js",
     "sourceFile": "yuanbao/send.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "yuanbao",
@@ -28108,9 +28064,7 @@
     "modulePath": "yuanbao/status.js",
     "sourceFile": "yuanbao/status.js",
     "navigateBefore": false,
-    "browserSession": {
-      "reuse": "site"
-    }
+    "siteSession": "persistent"
   },
   {
     "site": "zhihu",
