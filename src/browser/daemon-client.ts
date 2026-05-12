@@ -109,16 +109,16 @@ export interface BrowserProfileStatus {
 
 async function requestDaemon(pathname: string, init?: RequestInit & { timeout?: number }): Promise<Response> {
   const { timeout = 2000, headers, ...rest } = init ?? {};
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeout);
+  const controller = timeout > 0 ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), timeout) : null;
   try {
     return await fetch(`${DAEMON_URL}${pathname}`, {
       ...rest,
       headers: { ...OPENCLI_HEADERS, ...headers },
-      signal: controller.signal,
+      ...(controller && { signal: controller.signal }),
     });
   } finally {
-    clearTimeout(timer);
+    if (timer) clearTimeout(timer);
   }
 }
 
@@ -191,7 +191,7 @@ async function sendCommandRaw(
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(command),
-        timeout: 30000,
+        timeout: 0,
       });
 
       const result = (await res.json()) as DaemonResult;

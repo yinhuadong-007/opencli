@@ -169,6 +169,17 @@ describe('daemon-client', () => {
     expect(ids[0]).not.toBe(ids[1]);
   });
 
+  it('sendCommand does not apply a client-side HTTP timeout to daemon commands', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      status: 200,
+      json: () => Promise.resolve({ id: 'server', ok: true, data: 'ok' }),
+    } as Response);
+
+    await sendCommand('exec', { code: '1 + 1' });
+
+    expect(vi.mocked(fetch).mock.calls[0][1]).not.toHaveProperty('signal');
+  });
+
   it('sendCommand forwards OPENCLI_PROFILE as command contextId', async () => {
     vi.stubEnv('OPENCLI_PROFILE', 'work');
     vi.spyOn(Date, 'now').mockReturnValue(1_763_000_000_000);

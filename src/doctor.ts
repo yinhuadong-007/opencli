@@ -81,7 +81,10 @@ export async function checkConnectivity(opts?: { timeout?: number }): Promise<Co
   const start = Date.now();
   try {
     const bridge = new BrowserBridge();
-    const page = await bridge.connect({ timeout: opts?.timeout ?? DOCTOR_LIVE_TIMEOUT_SECONDS });
+    const page = await bridge.connect({
+      session: '__opencli_doctor__',
+      timeout: opts?.timeout ?? DOCTOR_LIVE_TIMEOUT_SECONDS,
+    });
     try {
       // Try a simple eval to verify end-to-end connectivity.
       await page.evaluate('1 + 1');

@@ -205,9 +205,11 @@ describe('doctor report rendering', () => {
 
   it('uses the fast default timeout for live connectivity checks', async () => {
     let timeoutSeen: number | undefined;
+    let sessionSeen: string | undefined;
     const closeWindow = vi.fn().mockResolvedValue(undefined);
-    mockConnect.mockImplementationOnce(async (opts?: { timeout?: number }) => {
+    mockConnect.mockImplementationOnce(async (opts?: { timeout?: number; session?: string }) => {
       timeoutSeen = opts?.timeout;
+      sessionSeen = opts?.session;
       return {
         evaluate: vi.fn().mockResolvedValue(2),
         closeWindow,
@@ -218,6 +220,7 @@ describe('doctor report rendering', () => {
     await runBrowserDoctor();
 
     expect(timeoutSeen).toBe(8);
+    expect(sessionSeen).toBe('__opencli_doctor__');
     expect(closeWindow).toHaveBeenCalledTimes(1);
   });
 
