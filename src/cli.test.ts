@@ -383,6 +383,8 @@ describe('createProgram root help descriptions', () => {
           name: 'session',
           flags: '--session <name>',
           takes_value: 'required',
+          required: true,
+          help: expect.stringContaining('required'),
         }),
         expect.objectContaining({
           name: 'window',
@@ -961,12 +963,15 @@ describe('browser tab targeting commands', () => {
 
   it('requires an explicit session for browser commands', async () => {
     const program = createProgram('', '');
+    program.exitOverride((err) => { throw err; });
+    program.commands.find(cmd => cmd.name() === 'browser')?.exitOverride((err) => { throw err; });
 
-    await program.parseAsync(['node', 'opencli', 'browser', 'state']);
+    await expect(program.parseAsync(['node', 'opencli', 'browser', 'state'])).rejects.toMatchObject({
+      code: 'commander.missingMandatoryOptionValue',
+    });
 
     expect(mockBrowserConnect).not.toHaveBeenCalled();
-    expect(stderrSpy.mock.calls.flat().join('')).toContain('--session <name> is required');
-    expect(process.exitCode).toBeDefined();
+    expect(stderrSpy.mock.calls.flat().join('')).toContain("required option '--session <name>' not specified");
   });
 
   it('runs browser commands against an explicit session', async () => {

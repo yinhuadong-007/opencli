@@ -686,7 +686,7 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
 
   const browser = program
     .command('browser')
-    .option('--session <name>', 'Browser session to use')
+    .requiredOption('--session <name>', 'Browser session to use (required)')
     .option('--window <mode>', 'Browser window mode: foreground or background')
     .description('Browser control — navigate, click, type, extract, wait (no LLM needed)');
   const originalBrowserDescription = browser.description();
@@ -811,7 +811,7 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
   }
 
   browser.command('bind')
-    .option('--session <name>', 'Browser session name to bind')
+    .option('--session <name>', 'Browser session name to bind (required)')
     .description('Bind the current Chrome tab/window to a browser session')
     .action(async (optsOrCommand, maybeCommand?: Command) => {
       const command = optsOrCommand instanceof Command ? optsOrCommand : maybeCommand;
@@ -841,7 +841,7 @@ export function createProgram(BUILTIN_CLIS: string, USER_CLIS: string): Command 
     });
 
   browser.command('unbind')
-    .option('--session <name>', 'Browser session name to detach')
+    .option('--session <name>', 'Browser session name to detach (required)')
     .description('Detach a bound browser session without closing the user tab/window')
     .action(async (optsOrCommand, maybeCommand?: Command) => {
       const command = optsOrCommand instanceof Command ? optsOrCommand : maybeCommand;
