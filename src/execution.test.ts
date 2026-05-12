@@ -190,8 +190,8 @@ describe('executeCommand — non-browser timeout', () => {
     await executeCommand(cmd, {}, false, { keepTab: 'false' });
 
     expect(sessionOpts).toHaveLength(2);
-    expect(sessionOpts[0]).toMatchObject({ session: 'site:test-execution', windowMode: 'background', siteSession: 'persistent' });
-    expect(sessionOpts[1]).toMatchObject({ session: 'site:test-execution', windowMode: 'background', siteSession: 'persistent' });
+    expect(sessionOpts[0]).toMatchObject({ session: 'site:test-execution', windowMode: 'foreground', siteSession: 'persistent' });
+    expect(sessionOpts[1]).toMatchObject({ session: 'site:test-execution', windowMode: 'foreground', siteSession: 'persistent' });
     expect(sessionOpts[0]?.idleTimeout).toBeUndefined();
     expect(sessionOpts[1]?.idleTimeout).toBeUndefined();
     expect(closeWindow).not.toHaveBeenCalled();
@@ -227,8 +227,8 @@ describe('executeCommand — non-browser timeout', () => {
     expect(sessionOpts[0]?.session).not.toBe(sessionOpts[1]?.session);
     expect(sessionOpts[0]?.idleTimeout).toBeUndefined();
     expect(sessionOpts[1]?.idleTimeout).toBeUndefined();
-    expect(sessionOpts[0]?.windowMode).toBe('background');
-    expect(sessionOpts[1]?.windowMode).toBe('background');
+    expect(sessionOpts[0]?.windowMode).toBe('foreground');
+    expect(sessionOpts[1]?.windowMode).toBe('foreground');
     expect(closeWindow).toHaveBeenCalledTimes(2);
     vi.restoreAllMocks();
   });
