@@ -15,7 +15,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-const TRENDS_EXPLORE_MIN_CALL_INTERVAL_MS = 10_000;
+const TRENDS_EXPLORE_MIN_CALL_INTERVAL_MS = 30_000;
 const TRENDS_EXPLORE_RATE_FILE = path.join(
   os.homedir(),
   '.opencli',
