@@ -497,6 +497,25 @@ async function getOwnedContainerGroupId(role: OwnedWindowRole, windowId: number)
   const groups = await chrome.tabGroups.query({ windowId, title: CONTAINER_TAB_GROUP_TITLE[role] });
   const existing = groups[0];
   if (!existing) return null;
+
+  // Keep exactly one group per role/title in this window: merge duplicates.
+  if (groups.length > 1) {
+    const primaryGroupId = existing.id;
+    for (const dup of groups.slice(1)) {
+      try {
+        const dupTabs = await chrome.tabs.query({ windowId, groupId: dup.id });
+        const dupTabIds = dupTabs
+          .map((tab) => tab.id)
+          .filter((id): id is number => id !== undefined);
+        if (dupTabIds.length > 0) {
+          await chrome.tabs.group({ groupId: primaryGroupId, tabIds: dupTabIds });
+        }
+      } catch (err) {
+        console.warn(`[opencli] Failed to merge duplicate ${role} tab group ${dup.id} -> ${primaryGroupId}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+  }
+
   container.groupId = existing.id;
   return existing.id;
 }
