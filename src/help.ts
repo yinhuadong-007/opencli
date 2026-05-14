@@ -147,11 +147,16 @@ export function classifyAdapter(domain: string | undefined): AdapterKind {
 
 export interface RootAdapterGroups {
   /** Externally-registered CLIs (docker, gh, vercel, ...) — passthrough binaries */
-  external: readonly string[];
+  external: readonly RootExternalCli[];
   /** Desktop-app adapters (chatgpt-app, chatwise, codex, ...) */
   apps: readonly string[];
   /** Web-site adapters (bilibili, dianping, ...) */
   sites: readonly string[];
+}
+
+export interface RootExternalCli {
+  name: string;
+  label: string;
 }
 
 function formatGroupSection(label: string, names: readonly string[]): string[] {
@@ -167,7 +172,7 @@ export function formatRootAdapterHelpText(groups: RootAdapterGroups): string {
   const total = groups.external.length + groups.apps.length + groups.sites.length;
   if (total === 0) return '';
   const lines: string[] = [''];
-  lines.push(...formatGroupSection('External CLIs', groups.external));
+  lines.push(...formatGroupSection('External CLIs', groups.external.map(cli => cli.label)));
   lines.push(...formatGroupSection('App adapters', groups.apps));
   lines.push(...formatGroupSection('Site adapters', groups.sites));
   lines.push("Run 'opencli list' for full command details, or 'opencli <site> --help' to inspect one site.");
@@ -231,12 +236,42 @@ function compactCommanderOptions(options: readonly CommanderOption[]): OptionSpe
     .filter((option): option is OptionSpec => option !== null);
 }
 
+/**
+ * Extracts a positional placeholder that should appear immediately after this
+ * command's name in user-facing path strings. Reads the leading positional
+ * (e.g. `<session>`) from a `.usage()` override; commands without a positional
+ * override return `null` so the path stays as-is.
+ *
+ * Example: `browser` declares `.usage('<session> <command> [options]')`,
+ * so `commanderPath(browserClickCmd)` becomes
+ * `['opencli', 'browser', '<session>', 'click']`.
+ */
+export function leadingPositionalFromUsage(command: Command): string | null {
+  const usage = (command as Command & { _usage?: string })._usage;
+  if (!usage) return null;
+  const match = usage.match(/^\s*(<[^>]+>)/);
+  return match ? match[1] : null;
+}
+
 function commanderPath(command: Command): string[] {
   const parts: string[] = [];
   let current: Command | null = command;
   while (current) {
     const name = current.name();
-    if (name) parts.push(name);
+    if (name) {
+      parts.push(name);
+      // If this command declares a leading-positional usage override AND we
+      // have already collected a child name below it, the positional must
+      // appear between this command and the child (i.e. before the names
+      // already collected). parts is in reverse order, so push to the end.
+      const positional = leadingPositionalFromUsage(current);
+      if (positional && parts.length > 1) {
+        // We collected child names first (reverse order). Move them up by one
+        // and put the positional at index `parts.length - 2` so reverse()
+        // places it between this command and the first child name.
+        parts.splice(parts.length - 1, 0, positional);
+      }
+    }
     current = current.parent;
   }
   return parts.reverse();
@@ -245,7 +280,10 @@ function commanderPath(command: Command): string[] {
 function commandPathFromRoot(namespaceRoot: Command, command: Command): string[] {
   const rootPath = commanderPath(namespaceRoot);
   const commandPath = commanderPath(command);
-  return commandPath.slice(rootPath.length);
+  // Strip placeholder positional segments (e.g. `<session>`) from the relative
+  // name so agents can still address subcommands by their leaf name. Display
+  // paths in `command` / `usage` still include the placeholders.
+  return commandPath.slice(rootPath.length).filter(part => !/^<.+>$/.test(part));
 }
 
 function collectLeafCommands(command: Command): Command[] {
@@ -303,10 +341,19 @@ export function commanderNamespaceHelpData(
   const leaves = collectLeafCommands(namespaceRoot)
     .filter(command => command !== namespaceRoot)
     .sort((a, b) => commandPathFromRoot(namespaceRoot, a).join(' ').localeCompare(commandPathFromRoot(namespaceRoot, b).join(' ')));
+  // Respect commander's `.usage()` override (e.g. `<session> <command> [options]`
+  // on `browser`); fall back to the generic `<command> [args] [options]` form.
+  // Read the private `_usage` field directly because `.usage()` returns the
+  // auto-generated form if no override was set.
+  const commandPath = commanderPath(namespaceRoot).join(' ');
+  const usageOverride = (namespaceRoot as Command & { _usage?: string })._usage;
+  const usage = usageOverride
+    ? `${commandPath} ${usageOverride}`
+    : `${commandPath} <command> [args] [options]`;
   return {
     namespace: namespaceRoot.name(),
-    command: commanderPath(namespaceRoot).join(' '),
-    usage: `${commanderPath(namespaceRoot).join(' ')} <command> [args] [options]`,
+    command: commandPath,
+    usage,
     description: opts.description ?? namespaceRoot.description(),
     command_count: leaves.length,
     commands: leaves.map(command => compactCommanderCommand(namespaceRoot, command, opts)),
@@ -314,7 +361,7 @@ export function commanderNamespaceHelpData(
     ...(opts.globalCommand ? { global_options: compactCommanderOptions(opts.globalCommand.options) } : {}),
     structured_help: {
       formats: ['yaml', 'json'],
-      usage: `${commanderPath(namespaceRoot).join(' ')} --help -f yaml`,
+      usage: `${commandPath} --help -f yaml`,
     },
   };
 }
@@ -426,7 +473,7 @@ function compactCommand(cmd: CliCommand): Record<string, unknown> {
 }
 
 export function rootHelpData(program: Command, groups: RootAdapterGroups): Record<string, unknown> {
-  const adapterNames = new Set<string>([...groups.external, ...groups.apps, ...groups.sites]);
+  const adapterNames = new Set<string>([...groups.external.map(cli => cli.name), ...groups.apps, ...groups.sites]);
   const commands = program.commands
     .filter(command => !adapterNames.has(command.name()))
     .map(command => ({
@@ -441,7 +488,8 @@ export function rootHelpData(program: Command, groups: RootAdapterGroups): Recor
     commands,
     external_clis: {
       count: groups.external.length,
-      clis: [...groups.external].sort(sortLocale),
+      clis: groups.external.map(cli => cli.name).sort(sortLocale),
+      display: groups.external.map(cli => cli.label).sort(sortLocale),
     },
     app_adapters: {
       count: groups.apps.length,
