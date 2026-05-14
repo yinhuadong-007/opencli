@@ -440,13 +440,56 @@ function normalizeGeo(rawGeo) {
   return geo;
 }
 
-async function forceScrollForRelated(page) {
+function parseQueries(rawQuery) {
+  const input = String(rawQuery || '').trim();
+  if (!input) return [];
+  // Default: treat the whole string as a single query, even if it contains commas.
+  // Multi-query mode: explicit bracket list syntax, e.g. "[a1],[a2]".
+  const bracketPairPattern = /^\s*\[[\s\S]*\]\s*(,\s*\[[\s\S]*\]\s*)*$/;
+  if (!bracketPairPattern.test(input)) {
+    return [input];
+  }
+
+  const matches = [...input.matchAll(/\[([\s\S]*?)\]/g)];
+  const queries = matches
+    .map((match) => String(match[1] || '').trim())
+    .filter(Boolean);
+  return queries.length > 0 ? queries : [input];
+}
+
+function encodeExploreQueryParam(queries) {
+  // Google Explore treats commas in q as multi-term delimiters.
+  // To preserve literal commas inside one term, pre-encode each term first.
+  // Example: "hello, world" -> "hello%2C%20world" (later whole q is encoded again -> %252C).
+  return queries.map((query) => encodeURIComponent(String(query))).join(', ');
+}
+
+async function simulateHumanScroll(page) {
   const script = `(() => {
+    const randInt = (min, max) => {
+      const lo = Math.ceil(min);
+      const hi = Math.floor(max);
+      return Math.floor(Math.random() * (hi - lo + 1)) + lo;
+    };
+    const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
     const root = document.scrollingElement || document.documentElement || document.body;
     const beforeY = Number(window.scrollY || root.scrollTop || 0);
-    const step = Math.max(900, Math.floor(window.innerHeight * 0.9));
+    const viewport = Math.max(600, Number(window.innerHeight || 900));
+    const baseStep = Math.floor(viewport * (0.72 + Math.random() * 0.4)); // 0.72x~1.12x
+    const jitter = randInt(-110, 140);
+    const step = Math.max(520, baseStep + jitter);
+
     try { window.scrollBy(0, step); } catch {}
     try { root.scrollTop = beforeY + step; } catch {}
+
+    // Human-like micro correction: occasionally pull back a little.
+    const shouldPullBack = Math.random() < 0.42;
+    let pullBack = 0;
+    if (shouldPullBack) {
+      pullBack = randInt(24, 110);
+      try { window.scrollBy(0, -pullBack); } catch {}
+      try { root.scrollTop = Math.max(0, beforeY + step - pullBack); } catch {}
+    }
 
     // Trends often uses nested lazy sections; nudge likely scroll containers too.
     const containers = Array.from(document.querySelectorAll('div, section, main'))
@@ -458,14 +501,38 @@ async function forceScrollForRelated(page) {
         } catch {
           return false;
         }
-      })
-      .slice(0, 6);
-    for (const el of containers) {
-      try { el.scrollTop += Math.max(600, Math.floor(el.clientHeight * 0.8)); } catch {}
+      });
+
+    // Randomize touched container count/order so behavior is less mechanical.
+    const shuffled = containers
+      .map((el) => ({ el, sort: Math.random() }))
+      .sort((a, b) => a.sort - b.sort)
+      .map((item) => item.el);
+    const touchCount = clamp(randInt(2, 6), 0, shuffled.length);
+    const touched = shuffled.slice(0, touchCount);
+
+    for (const el of touched) {
+      const localBase = Math.floor((el.clientHeight || 700) * (0.55 + Math.random() * 0.5)); // 0.55x~1.05x
+      const localJitter = randInt(-90, 120);
+      const localStep = Math.max(260, localBase + localJitter);
+      try { el.scrollTop += localStep; } catch {}
+
+      if (Math.random() < 0.35) {
+        const back = randInt(18, 75);
+        try { el.scrollTop -= back; } catch {}
+      }
     }
 
     const afterY = Number(window.scrollY || root.scrollTop || 0);
-    return { beforeY, afterY, moved: afterY - beforeY, containers: containers.length };
+    return {
+      beforeY,
+      afterY,
+      moved: afterY - beforeY,
+      step,
+      pullBack,
+      containerCandidates: containers.length,
+      containerTouched: touched.length,
+    };
   })()`;
   return page.evaluate(script);
 }
@@ -484,9 +551,9 @@ cli({
       positional: true,
       type: 'string',
       required: true,
-      help: 'Search term(s) to explore; for multiple terms, separate with commas, e.g. "ai,opencli,openclaw"',
+      help: 'Search query. A plain string is treated as ONE term (e.g. "hello, world"). For multiple terms, use bracket list syntax: "[a1],[a2]".',
     },
-    { name: 'geo', type: 'string', default: 'Worldwide', help: 'Country/region code (e.g. US, CN, GB) or Worldwide' },
+    { name: 'geo', type: 'string', default: 'US', help: 'Country/region code (e.g. US, CN, GB) or Worldwide' },
     {
       name: 'date',
       type: 'string',
@@ -527,10 +594,7 @@ cli({
     await enforceStartInterval(vlog);
 
     const rawQuery = String(kwargs.query || '').trim();
-    const queries = rawQuery
-      .split(',')
-      .map((query) => query.trim())
-      .filter(Boolean);
+    const queries = parseQueries(rawQuery);
     const geo = normalizeGeo(kwargs.geo);
     const date = String(kwargs.date || 'now 7-d').trim();
     const includeRelatedDetails = Boolean(kwargs.details ?? false);
@@ -550,16 +614,17 @@ cli({
       throw new CliError('INVALID_ARGS', '`tz` must be a number (minutes offset)', 'Example: --tz -480');
     }
 
+    const qParam = encodeExploreQueryParam(queries);
     const explorePageUrl =
       `https://trends.google.com/explore?` +
       `geo=${encodeURIComponent(geo)}` +
-      `&q=${encodeURIComponent(queries.join(', '))}` +
+      `&q=${encodeURIComponent(qParam)}` +
       `&date=${encodeURIComponent(date)}` +
       `&hl=${encodeURIComponent(hl)}`;
     const legacyExplorePageUrl =
       `https://trends.google.com/trends/explore?` +
       `geo=${encodeURIComponent(geo)}` +
-      `&q=${encodeURIComponent(queries.join(', '))}` +
+      `&q=${encodeURIComponent(qParam)}` +
       `&date=${encodeURIComponent(date)}` +
       `&legacy&hl=${encodeURIComponent(hl)}`;
 
@@ -576,7 +641,7 @@ cli({
 
     const runModernPhase = async (timeoutMs) => {
       let deadlineMs = Date.now() + timeoutMs;
-      let scrolledForRelated = false;
+      let scrolledOnce = false;
 
       while (Date.now() < deadlineMs) {
         phaseStats.modern.loops += 1;
@@ -644,17 +709,17 @@ cli({
           return;
         }
 
-        // Related-queries RPC (fXqlme) is often lazy-loaded only after scrolling.
-        if (needRelated && hasTimeline && !hasRelated && !scrolledForRelated && phaseStats.modern.loops >= 4) {
+        // Always simulate one human-like scroll to trigger lazy sections and stabilize capture behavior.
+        if (!scrolledOnce && phaseStats.modern.loops >= 4) {
           try {
             const remainingBeforeResetMs = Math.max(0, deadlineMs - Date.now());
-            const pass1 = await forceScrollForRelated(page);
+            const pass1 = await simulateHumanScroll(page);
             await page.wait(0.7);
-            const pass2 = await forceScrollForRelated(page);
+            const pass2 = await simulateHumanScroll(page);
             await page.wait(0.7);
-            scrolledForRelated = true;
+            scrolledOnce = true;
             deadlineMs = Date.now() + timeoutMs;
-            vlog(`phase=modern triggered lazy related RPC: pass1=${JSON.stringify(pass1)} pass2=${JSON.stringify(pass2)}`);
+            vlog(`phase=modern simulated human scroll: pass1=${JSON.stringify(pass1)} pass2=${JSON.stringify(pass2)}`);
             vlog(`phase=modern deadline reset after scroll: remaining_before_ms=${remainingBeforeResetMs} new_deadline_ts=${deadlineMs}`);
           } catch {
             // Best effort only.
@@ -681,7 +746,7 @@ cli({
       vlog(`navigated to legacy explore page: ${legacyExplorePageUrl}`);
 
       let deadlineMs = Date.now() + timeoutMs;
-      let scrolledForRelated = false;
+      let scrolledOnce = false;
       let relatedSettled = !needRelated;
       while (Date.now() < deadlineMs) {
         phaseStats.legacy.loops += 1;
@@ -749,17 +814,17 @@ cli({
         const hasRelated = !needRelated || relatedSettled;
         if (hasTimeline && hasRelated) return;
 
-        // Legacy relatedsearches is sometimes lazy/refreshed after user interaction.
-        if (needRelated && hasTimeline && !hasRelated && !scrolledForRelated && phaseStats.legacy.loops >= 3) {
+        // Always simulate one human-like scroll to trigger lazy sections and refresh behavior.
+        if (!scrolledOnce && phaseStats.legacy.loops >= 3) {
           try {
             const remainingBeforeResetMs = Math.max(0, deadlineMs - Date.now());
-            const pass1 = await forceScrollForRelated(page);
+            const pass1 = await simulateHumanScroll(page);
             await page.wait(0.7);
-            const pass2 = await forceScrollForRelated(page);
+            const pass2 = await simulateHumanScroll(page);
             await page.wait(0.7);
-            scrolledForRelated = true;
+            scrolledOnce = true;
             deadlineMs = Date.now() + timeoutMs;
-            vlog(`phase=legacy triggered related refresh by scroll: pass1=${JSON.stringify(pass1)} pass2=${JSON.stringify(pass2)}`);
+            vlog(`phase=legacy simulated human scroll: pass1=${JSON.stringify(pass1)} pass2=${JSON.stringify(pass2)}`);
             vlog(`phase=legacy deadline reset after scroll: remaining_before_ms=${remainingBeforeResetMs} new_deadline_ts=${deadlineMs}`);
           } catch {
             // Best effort only.
