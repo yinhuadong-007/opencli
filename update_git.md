@@ -197,7 +197,7 @@ git remote -v
 git fetch upstream
 git rev-list --left-right --count main...upstream/main
 git branch backup/pre-sync-YYYY-MM-DD
-git rebase upstream/main
+git rebase upstream/main  或者 git merge upstream/main
 git push --force-with-lease origin main
 ```
 

@@ -465,33 +465,19 @@ function encodeExploreQueryParam(queries) {
 }
 
 async function simulateHumanScroll(page) {
-  const script = `(() => {
+  const script = `(async () => {
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     const randInt = (min, max) => {
       const lo = Math.ceil(min);
       const hi = Math.floor(max);
       return Math.floor(Math.random() * (hi - lo + 1)) + lo;
     };
-    const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
     const root = document.scrollingElement || document.documentElement || document.body;
     const beforeY = Number(window.scrollY || root.scrollTop || 0);
     const viewport = Math.max(600, Number(window.innerHeight || 900));
-    const baseStep = Math.floor(viewport * (0.72 + Math.random() * 0.4)); // 0.72x~1.12x
-    const jitter = randInt(-110, 140);
-    const step = Math.max(520, baseStep + jitter);
 
-    try { window.scrollBy(0, step); } catch {}
-    try { root.scrollTop = beforeY + step; } catch {}
-
-    // Human-like micro correction: occasionally pull back a little.
-    const shouldPullBack = Math.random() < 0.42;
-    let pullBack = 0;
-    if (shouldPullBack) {
-      pullBack = randInt(24, 110);
-      try { window.scrollBy(0, -pullBack); } catch {}
-      try { root.scrollTop = Math.max(0, beforeY + step - pullBack); } catch {}
-    }
-
-    // Trends often uses nested lazy sections; nudge likely scroll containers too.
+    // Trends often uses nested lazy sections; drive both the document and nested
+    // scroll containers to the bottom so lazy sections reliably request data.
     const containers = Array.from(document.querySelectorAll('div, section, main'))
       .filter((el) => {
         try {
@@ -503,35 +489,106 @@ async function simulateHumanScroll(page) {
         }
       });
 
-    // Randomize touched container count/order so behavior is less mechanical.
-    const shuffled = containers
+    const orderedContainers = containers
       .map((el) => ({ el, sort: Math.random() }))
       .sort((a, b) => a.sort - b.sort)
       .map((item) => item.el);
-    const touchCount = clamp(randInt(2, 6), 0, shuffled.length);
-    const touched = shuffled.slice(0, touchCount);
 
-    for (const el of touched) {
-      const localBase = Math.floor((el.clientHeight || 700) * (0.55 + Math.random() * 0.5)); // 0.55x~1.05x
-      const localJitter = randInt(-90, 120);
-      const localStep = Math.max(260, localBase + localJitter);
-      try { el.scrollTop += localStep; } catch {}
+    let iterations = 0;
+    let lastHeight = 0;
+    let stableHeightCount = 0;
+    for (; iterations < 18; iterations += 1) {
+      const docHeight = Math.max(
+        root?.scrollHeight || 0,
+        document.documentElement?.scrollHeight || 0,
+        document.body?.scrollHeight || 0,
+      );
+      const currentY = Number(window.scrollY || root.scrollTop || 0);
+      const maxY = Math.max(0, docHeight - viewport);
+      if (docHeight === lastHeight) stableHeightCount += 1;
+      else stableHeightCount = 0;
+      lastHeight = docHeight;
 
-      if (Math.random() < 0.35) {
-        const back = randInt(18, 75);
-        try { el.scrollTop -= back; } catch {}
+      if (currentY >= maxY - 8 && stableHeightCount >= 2) break;
+
+      const step = Math.max(240, Math.floor(viewport * (0.24 + Math.random() * 0.16)) + randInt(-40, 60));
+      const nextY = Math.min(maxY, currentY + step);
+      try { window.scrollTo(0, nextY); } catch {}
+      try { root.scrollTop = nextY; } catch {}
+
+      for (const el of orderedContainers) {
+        try {
+          if (el.scrollHeight > el.clientHeight + 8) {
+            const localStep = Math.max(120, Math.floor((el.clientHeight || 700) * 0.28));
+            el.scrollTop = Math.min(el.scrollHeight - el.clientHeight, el.scrollTop + localStep);
+          }
+        } catch {}
       }
+      await sleep(randInt(260, 520));
+    }
+
+    const finalHeight = Math.max(
+      root?.scrollHeight || 0,
+      document.documentElement?.scrollHeight || 0,
+      document.body?.scrollHeight || 0,
+    );
+    const finalY = Math.max(0, finalHeight - viewport);
+    try { window.scrollTo(0, finalY); } catch {}
+    try { root.scrollTop = finalY; } catch {}
+    for (const el of orderedContainers) {
+      try { el.scrollTop = el.scrollHeight; } catch {}
+    }
+
+    await sleep(randInt(900, 1400));
+
+    let rollBackIterations = 0;
+    const middleY = Math.max(0, Math.floor(finalY / 2));
+    for (; rollBackIterations < 180; rollBackIterations += 1) {
+      const currentY = Number(window.scrollY || root.scrollTop || 0);
+      if (currentY <= middleY) break;
+      const rollbackStep = randInt(35, 80);
+      const nextY = Math.max(middleY, currentY - rollbackStep);
+      try { window.scrollTo(0, nextY); } catch {}
+      try { root.scrollTop = nextY; } catch {}
+
+      for (const el of orderedContainers) {
+        try {
+          if (el.scrollTop > 0) {
+            const elMiddle = Math.max(0, Math.floor((el.scrollHeight - el.clientHeight) / 2));
+            el.scrollTop = Math.max(elMiddle, el.scrollTop - randInt(25, 65));
+          }
+        } catch {}
+      }
+      await sleep(randInt(220, 420));
+    }
+
+    try { window.scrollTo(0, middleY); } catch {}
+    try { root.scrollTop = middleY; } catch {}
+    for (const el of orderedContainers) {
+      try { el.scrollTop = Math.max(0, Math.floor((el.scrollHeight - el.clientHeight) / 2)); } catch {}
     }
 
     const afterY = Number(window.scrollY || root.scrollTop || 0);
+    const scrollHeight = Math.max(
+      root?.scrollHeight || 0,
+      document.documentElement?.scrollHeight || 0,
+      document.body?.scrollHeight || 0,
+    );
+    const reachedBottom = finalY + viewport >= finalHeight - 12;
+    const nearMiddle = Math.abs(afterY - middleY) <= 12;
     return {
       beforeY,
       afterY,
       moved: afterY - beforeY,
-      step,
-      pullBack,
+      viewport,
+      scrollHeight,
+      reachedBottom,
+      nearMiddle,
+      middleY,
+      iterations,
+      rollBackIterations,
       containerCandidates: containers.length,
-      containerTouched: touched.length,
+      containerTouched: orderedContainers.length,
     };
   })()`;
   return page.evaluate(script);
